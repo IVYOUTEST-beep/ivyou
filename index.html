@@ -4,24 +4,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <title>IVYOU AR - Album View</title>
+    <title>IVYOU AR</title>
     
     <script>
-      // KONFIGURACJA AUTOMATYCZNA
+      // --- KONFIGURACJA ŚCIEŻEK ---
       const urlParams = new URLSearchParams(window.location.search);
-      const klientID = urlParams.get('k') || 'demo'; // Domyślnie folder demo
-      const iloscZdjec = parseInt(urlParams.get('n')) || 1; // Domyślnie 1 zdjęcie, ale można podać więcej w linku
       
-      const folder = `./klienci/${klientID}`;
+      // 1. Pobieramy nazwę podfolderu, który jest wewnątrz folderu "ivyou"
+      const klientID = urlParams.get('k'); 
+      
+      // 2. Pobieramy ilość filmów (domyślnie 1)
+      const iloscZdjec = parseInt(urlParams.get('n')) || 1;
+
+      // ZABEZPIECZENIE: Sprawdzamy, czy w linku jest "?k=..."
+      if (!klientID) {
+          alert("UWAGA: Nie podałeś nazwy folderu w linku!\n\nPoprawny link to np:\n.../index.html?k=nazwa_twojego_folderu");
+          // Ustawiamy demo tylko żeby kod się nie wywalił, ale użytkownik wie że jest błąd
+          throw new Error("Zatrzymano - brak ID w linku"); 
+      }
+      
+      // --- TUTAJ JEST ZMIANA ---
+      // Szukamy w folderze "ivyou", a potem w folderze klienta
+      const folder = `./ivyou/${klientID}`;
+      
       const mindFile = `${folder}/targets.mind`;
-      
-      console.log(`Ładowanie klienta: ${klientID}, Ilość celów: ${iloscZdjec}`);
+      console.log(`Szukam plików w: ${folder}`);
     </script>
 
     <style>
       body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: black; }
       
-      /* Styl UI (taki sam jak wcześniej) */
+      /* UI LAYER */
       #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
       .scan-frame-mask { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); width: 65vw; height: 65vw; border: 3px solid #D4AF37; border-radius: 12px; box-shadow: 0 0 0 100vmax rgba(10, 8, 3, 0.85); }
       .logo-container { margin-top: 40px; z-index: 10000; }
@@ -36,18 +49,18 @@
   <body>
 
     <script>
-        // Start sceny
+        // Start sceny AR
         let htmlContent = `<a-scene mindar-image="imageTargetSrc: ${mindFile}; maxTrack: 1" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">`;
         
         htmlContent += `<a-assets>`;
-        // Pętla generująca wideo: 0.mp4, 1.mp4, 2.mp4...
+        // Pętla wideo: szuka plików 0.mp4, 1.mp4 w folderze ./ivyou/nazwa_klienta/
         for(let i=0; i < iloscZdjec; i++) {
             htmlContent += `<video id="vid${i}" src="${folder}/${i}.mp4" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted autoplay></video>`;
         }
         htmlContent += `</a-assets>`;
         htmlContent += `<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
 
-        // Pętla generująca cele (targets)
+        // Pętla celów (targets)
         for(let i=0; i < iloscZdjec; i++) {
             htmlContent += `
             <a-entity mindar-image-target="targetIndex: ${i}" class="target-entity" data-id="${i}">
@@ -76,8 +89,6 @@
           const scanGuide = document.querySelector("#scan-guide");
           const scanText = document.querySelector("#scan-text");
           
-          // Pobieramy wszystkie wygenerowane cele
-          // Używamy setTimeout, żeby upewnić się, że scena się załadowała
           setTimeout(() => {
               const targets = document.querySelectorAll('.target-entity');
               
@@ -85,7 +96,6 @@
                 target.addEventListener("targetFound", event => {
                   const id = target.getAttribute('data-id');
                   const video = document.querySelector(`#vid${id}`);
-                  
                   if(video) video.play();
                   
                   unmuteBtn.style.display = "block";
@@ -98,7 +108,6 @@
                 target.addEventListener("targetLost", event => {
                   const id = target.getAttribute('data-id');
                   const video = document.querySelector(`#vid${id}`);
-                  
                   if(video) video.pause();
                   
                   unmuteBtn.style.display = "none";
