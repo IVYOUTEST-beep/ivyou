@@ -4,47 +4,117 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <title>IVYOU AR - Album View</title>
     
-    <title>IVYOU - Zobacz Magię</title>
+    <script>
+      // KONFIGURACJA AUTOMATYCZNA
+      const urlParams = new URLSearchParams(window.location.search);
+      const klientID = urlParams.get('k') || 'demo'; // Domyślnie folder demo
+      const iloscZdjec = parseInt(urlParams.get('n')) || 1; // Domyślnie 1 zdjęcie, ale można podać więcej w linku
+      
+      const folder = `./klienci/${klientID}`;
+      const mindFile = `${folder}/targets.mind`;
+      
+      console.log(`Ładowanie klienta: ${klientID}, Ilość celów: ${iloscZdjec}`);
+    </script>
+
     <style>
-      /* Ukrywamy przycisk startu VR, bo to AR */
+      body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: black; }
+      
+      /* Styl UI (taki sam jak wcześniej) */
+      #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
+      .scan-frame-mask { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); width: 65vw; height: 65vw; border: 3px solid #D4AF37; border-radius: 12px; box-shadow: 0 0 0 100vmax rgba(10, 8, 3, 0.85); }
+      .logo-container { margin-top: 40px; z-index: 10000; }
+      .logo-img { height: 70px; display: block; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.9)); }
+      #fallback-logo { font-size: 30px; font-weight: 900; color: #D4AF37; letter-spacing: 5px; text-shadow: 2px 2px 10px black; }
+      .instruction { position: absolute; top: 70%; color: #D4AF37; font-size: 16px; text-transform: uppercase; letter-spacing: 4px; font-weight: bold; text-shadow: 1px 1px 5px black; z-index: 10000; text-align: center; }
+      #unmuteButton { position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); z-index: 10001; background: linear-gradient(135deg, #D4AF37 0%, #FDCF58 100%); color: black; font-weight: 900; border: none; padding: 15px 50px; border-radius: 50px; font-size: 16px; cursor: pointer; display: none; pointer-events: auto; box-shadow: 0 10px 25px rgba(212, 175, 55, 0.4); }
+      #websiteButton { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 10002; text-decoration: none; background-color: rgba(0, 0, 0, 0.6); border: 1px solid #D4AF37; color: #D4AF37; padding: 12px 25px; border-radius: 30px; font-size: 14px; letter-spacing: 2px; font-weight: bold; pointer-events: auto; display: flex; align-items: center; gap: 10px; }
       .a-enter-vr-button { display: none; }
     </style>
   </head>
   <body>
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind;" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-      
-      <a-assets>
-        <video id="vid" src="./film.mp4" loop="true" crossorigin="anonymous"></video>
-      </a-assets>
-
-      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-
-      <a-entity mindar-image-target="targetIndex: 0">
-        
-        <a-plane src="#vid" position="0 0 0" height="1" width="1" rotation="0 0 0" 
-                 class="clickable" 
-                 onclick="document.querySelector('#vid').play();">
-        </a-plane>
-        
-      </a-entity>
-    </a-scene>
 
     <script>
-      const video = document.querySelector("#vid");
-      const sceneEl = document.querySelector('a-scene');
-      const target = document.querySelector('[mindar-image-target]');
+        // Start sceny
+        let htmlContent = `<a-scene mindar-image="imageTargetSrc: ${mindFile}; maxTrack: 1" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">`;
+        
+        htmlContent += `<a-assets>`;
+        // Pętla generująca wideo: 0.mp4, 1.mp4, 2.mp4...
+        for(let i=0; i < iloscZdjec; i++) {
+            htmlContent += `<video id="vid${i}" src="${folder}/${i}.mp4" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted autoplay></video>`;
+        }
+        htmlContent += `</a-assets>`;
+        htmlContent += `<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
 
-      // Gdy wykryje obrazek -> graj film
-      target.addEventListener("targetFound", event => {
-        console.log("Znaleziono okładkę IVYOU!");
-        video.play();
-      });
+        // Pętla generująca cele (targets)
+        for(let i=0; i < iloscZdjec; i++) {
+            htmlContent += `
+            <a-entity mindar-image-target="targetIndex: ${i}" class="target-entity" data-id="${i}">
+                <a-plane src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0"></a-plane>
+            </a-entity>`;
+        }
 
-      // Gdy zgubi obrazek -> pauzuj film
-      target.addEventListener("targetLost", event => {
-        console.log("Zgubiono cel");
-        video.pause();
+        htmlContent += `</a-scene>`;
+        document.write(htmlContent);
+    </script>
+
+    <div id="ui-layer">
+      <div class="logo-container">
+        <img src="./logo.png" class="logo-img" alt="IVYOU AR" onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='block';">
+        <div id="fallback-logo" style="display:none;">IVYOU</div>
+      </div>
+      <div id="scan-guide" class="scan-frame-mask"></div>
+      <div id="scan-text" class="instruction">Skieruj wizjer na zdjęcie</div>
+    </div>
+    <button id="unmuteButton">🔊 ODBLOKUJ DŹWIĘK</button>
+    <a href="https://ivyou.pl" target="_blank" id="websiteButton">IVYOU.PL</a>
+
+    <script>
+      window.addEventListener('load', () => {
+          const unmuteBtn = document.querySelector("#unmuteButton");
+          const scanGuide = document.querySelector("#scan-guide");
+          const scanText = document.querySelector("#scan-text");
+          
+          // Pobieramy wszystkie wygenerowane cele
+          // Używamy setTimeout, żeby upewnić się, że scena się załadowała
+          setTimeout(() => {
+              const targets = document.querySelectorAll('.target-entity');
+              
+              targets.forEach(target => {
+                target.addEventListener("targetFound", event => {
+                  const id = target.getAttribute('data-id');
+                  const video = document.querySelector(`#vid${id}`);
+                  
+                  if(video) video.play();
+                  
+                  unmuteBtn.style.display = "block";
+                  scanGuide.style.opacity = "0";
+                  scanText.style.opacity = "0";
+                  scanGuide.style.transition = "opacity 0.8s ease-out";
+                  scanText.style.transition = "opacity 0.8s ease-out";
+                });
+
+                target.addEventListener("targetLost", event => {
+                  const id = target.getAttribute('data-id');
+                  const video = document.querySelector(`#vid${id}`);
+                  
+                  if(video) video.pause();
+                  
+                  unmuteBtn.style.display = "none";
+                  scanGuide.style.opacity = "1";
+                  scanText.style.opacity = "1";
+                });
+              });
+          }, 1000);
+
+          unmuteBtn.addEventListener("click", () => {
+            document.querySelectorAll('video').forEach(v => { v.muted = false; v.volume = 1.0; });
+            unmuteBtn.innerText = "🎵 Odtwarzanie...";
+            unmuteBtn.style.background = "linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)";
+            unmuteBtn.style.color = "white";
+            setTimeout(() => { unmuteBtn.style.opacity = "0"; setTimeout(() => { unmuteBtn.style.display = "none"; }, 500); }, 2500);
+          });
       });
     </script>
   </body>
