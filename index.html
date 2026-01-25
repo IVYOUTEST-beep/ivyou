@@ -4,37 +4,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <title>IVYOU AR</title>
-    
-    <script>
-      // --- KONFIGURACJA ŚCIEŻEK ---
-      const urlParams = new URLSearchParams(window.location.search);
-      
-      // 1. Pobieramy nazwę podfolderu, który jest wewnątrz folderu "ivyou"
-      const klientID = urlParams.get('k'); 
-      
-      // 2. Pobieramy ilość filmów (domyślnie 1)
-      const iloscZdjec = parseInt(urlParams.get('n')) || 1;
-
-      // ZABEZPIECZENIE: Sprawdzamy, czy w linku jest "?k=..."
-      if (!klientID) {
-          alert("UWAGA: Nie podałeś nazwy folderu w linku!\n\nPoprawny link to np:\n.../index.html?k=nazwa_twojego_folderu");
-          // Ustawiamy demo tylko żeby kod się nie wywalił, ale użytkownik wie że jest błąd
-          throw new Error("Zatrzymano - brak ID w linku"); 
-      }
-      
-      // --- TUTAJ JEST ZMIANA ---
-      // Szukamy w folderze "ivyou", a potem w folderze klienta
-      const folder = `./ivyou/${klientID}`;
-      
-      const mindFile = `${folder}/targets.mind`;
-      console.log(`Szukam plików w: ${folder}`);
-    </script>
+    <title>IVYOU AR - Auto Detect</title>
 
     <style>
       body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: black; }
       
-      /* UI LAYER */
+      /* EKRAN ŁADOWANIA (Widoczny podczas skanowania) */
+      #loader-screen {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: black; z-index: 99999;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        color: #D4AF37;
+      }
+      .spinner {
+        width: 50px; height: 50px; border: 5px solid #333; border-top: 5px solid #D4AF37; border-radius: 50%;
+        animation: spin 1s linear infinite; margin-bottom: 20px;
+      }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+      /* Reszta stylów bez zmian */
+      #vid { position: absolute; top: -10000px; visibility: hidden; }
       #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
       .scan-frame-mask { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); width: 65vw; height: 65vw; border: 3px solid #D4AF37; border-radius: 12px; box-shadow: 0 0 0 100vmax rgba(10, 8, 3, 0.85); }
       .logo-container { margin-top: 40px; z-index: 10000; }
@@ -48,32 +37,12 @@
   </head>
   <body>
 
-    <script>
-        // Start sceny AR
-        let htmlContent = `<a-scene mindar-image="imageTargetSrc: ${mindFile}; maxTrack: 1" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">`;
-        
-        htmlContent += `<a-assets>`;
-        // Pętla wideo: szuka plików 0.mp4, 1.mp4 w folderze ./ivyou/nazwa_klienta/
-        for(let i=0; i < iloscZdjec; i++) {
-            htmlContent += `<video id="vid${i}" src="${folder}/${i}.mp4" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted autoplay></video>`;
-        }
-        htmlContent += `</a-assets>`;
-        htmlContent += `<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
+    <div id="loader-screen">
+        <div class="spinner"></div>
+        <div id="loader-text">Szukam magii...</div>
+    </div>
 
-        // Pętla celów (targets)
-        for(let i=0; i < iloscZdjec; i++) {
-            htmlContent += `
-            <a-entity mindar-image-target="targetIndex: ${i}" class="target-entity" data-id="${i}">
-                <a-plane src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0"></a-plane>
-            </a-entity>`;
-        }
-
-        htmlContent += `</a-scene>`;
-        document.write(htmlContent);
-    </script>
-
-    <div id="ui-layer">
-      <div class="logo-container">
+    <div id="ui-layer" style="display:none;"> <div class="logo-container">
         <img src="./logo.png" class="logo-img" alt="IVYOU AR" onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='block';">
         <div id="fallback-logo" style="display:none;">IVYOU</div>
       </div>
@@ -81,41 +50,129 @@
       <div id="scan-text" class="instruction">Skieruj wizjer na zdjęcie</div>
     </div>
     <button id="unmuteButton">🔊 ODBLOKUJ DŹWIĘK</button>
-    <a href="https://ivyou.pl" target="_blank" id="websiteButton">IVYOU.PL</a>
+    <a href="https://ivyou.pl" target="_blank" id="websiteButton" style="display:none;">IVYOU.PL</a>
+
+    <div id="ar-container"></div>
 
     <script>
-      window.addEventListener('load', () => {
+      // --- KROK 1: Konfiguracja ---
+      const urlParams = new URLSearchParams(window.location.search);
+      const klientID = urlParams.get('k');
+
+      if (!klientID) {
+          document.getElementById('loader-text').innerText = "BŁĄD: Brak nazwy folderu w linku (?k=...)";
+          document.querySelector('.spinner').style.borderTopColor = "red";
+          throw new Error("Stop");
+      }
+
+      const folder = `./ivyou/${klientID}`;
+      const mindFile = `${folder}/targets.mind`;
+
+      // --- KROK 2: Detektyw Plików (Funkcja Async) ---
+      async function wykryjPlikiIStartuj() {
+          const maxFilesToCheck = 50; // Maksymalnie sprawdzimy 50 plików, żeby nie zwiesić przeglądarki
+          let znalezionePliki = 0;
+          const loaderText = document.getElementById('loader-text');
+
+          console.log("Rozpoczynam skanowanie plików w: " + folder);
+
+          // Pętla sprawdzająca pliki po kolei: 0.mp4, 1.mp4...
+          for (let i = 0; i < maxFilesToCheck; i++) {
+              loaderText.innerText = `Skanuję plik: ${i}.mp4...`;
+              try {
+                  // "Pingujemy" plik (metoda HEAD pobiera tylko nagłówki, jest super szybka)
+                  const response = await fetch(`${folder}/${i}.mp4`, { method: 'HEAD' });
+                  
+                  if (response.ok) {
+                      znalezionePliki++;
+                      console.log(`Znaleziono: ${i}.mp4`);
+                  } else {
+                      // Jeśli trafimy na błąd (np. 404), przerywamy pętlę. Koniec albumu.
+                      console.log(`Nie znaleziono: ${i}.mp4. Koniec skanowania.`);
+                      break; 
+                  }
+              } catch (e) {
+                  console.log("Błąd sieci przy pliku " + i);
+                  break;
+              }
+          }
+
+          if (znalezionePliki === 0) {
+              loaderText.innerText = "BŁĄD: Nie znaleziono żadnych filmów (0.mp4) w folderze!";
+              document.querySelector('.spinner').style.borderTopColor = "red";
+              return;
+          }
+
+          console.log(`Zakończono. Razem filmów: ${znalezionePliki}`);
+          loaderText.innerText = "Ładowanie silnika AR...";
+
+          // --- KROK 3: Budowanie Sceny AR ---
+          uruchomAR(znalezionePliki);
+      }
+
+      function uruchomAR(ilosc) {
+          // Budujemy kod HTML sceny w pamięci
+          let html = `<a-scene mindar-image="imageTargetSrc: ${mindFile}; maxTrack: 1" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">`;
+          
+          html += `<a-assets>`;
+          for(let i=0; i < ilosc; i++) {
+              html += `<video id="vid${i}" src="${folder}/${i}.mp4" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted autoplay></video>`;
+          }
+          html += `</a-assets>`;
+          
+          html += `<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
+
+          for(let i=0; i < ilosc; i++) {
+              html += `
+              <a-entity mindar-image-target="targetIndex: ${i}" class="target-entity" data-id="${i}">
+                  <a-plane src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0"></a-plane>
+              </a-entity>`;
+          }
+          html += `</a-scene>`;
+
+          // Wstrzykujemy scenę do strony
+          document.getElementById('ar-container').innerHTML = html;
+
+          // Ukrywamy loader, pokazujemy UI
+          setTimeout(() => {
+              document.getElementById('loader-screen').style.display = 'none';
+              document.getElementById('ui-layer').style.display = 'flex';
+              document.getElementById('websiteButton').style.display = 'flex';
+              
+              // Inicjujemy obsługę zdarzeń (logika z poprzedniego kodu)
+              initEvents();
+          }, 1000); // Małe opóźnienie dla pewności
+      }
+
+      function initEvents() {
           const unmuteBtn = document.querySelector("#unmuteButton");
           const scanGuide = document.querySelector("#scan-guide");
           const scanText = document.querySelector("#scan-text");
-          
-          setTimeout(() => {
-              const targets = document.querySelectorAll('.target-entity');
+          const targets = document.querySelectorAll('.target-entity');
               
-              targets.forEach(target => {
-                target.addEventListener("targetFound", event => {
-                  const id = target.getAttribute('data-id');
-                  const video = document.querySelector(`#vid${id}`);
-                  if(video) video.play();
-                  
-                  unmuteBtn.style.display = "block";
-                  scanGuide.style.opacity = "0";
-                  scanText.style.opacity = "0";
-                  scanGuide.style.transition = "opacity 0.8s ease-out";
-                  scanText.style.transition = "opacity 0.8s ease-out";
-                });
+          targets.forEach(target => {
+            target.addEventListener("targetFound", event => {
+              const id = target.getAttribute('data-id');
+              const video = document.querySelector(`#vid${id}`);
+              if(video) video.play();
+              
+              unmuteBtn.style.display = "block";
+              scanGuide.style.opacity = "0";
+              scanText.style.opacity = "0";
+              scanGuide.style.transition = "opacity 0.8s ease-out";
+              scanText.style.transition = "opacity 0.8s ease-out";
+            });
 
-                target.addEventListener("targetLost", event => {
-                  const id = target.getAttribute('data-id');
-                  const video = document.querySelector(`#vid${id}`);
-                  if(video) video.pause();
-                  
-                  unmuteBtn.style.display = "none";
-                  scanGuide.style.opacity = "1";
-                  scanText.style.opacity = "1";
-                });
-              });
-          }, 1000);
+            target.addEventListener("targetLost", event => {
+              const id = target.getAttribute('data-id');
+              const video = document.querySelector(`#vid${id}`);
+              if(video) video.pause();
+              
+              unmuteBtn.style.display = "none";
+              scanGuide.style.opacity = "1";
+              scanText.style.opacity = "1";
+            });
+          });
 
           unmuteBtn.addEventListener("click", () => {
             document.querySelectorAll('video').forEach(v => { v.muted = false; v.volume = 1.0; });
@@ -124,7 +181,11 @@
             unmuteBtn.style.color = "white";
             setTimeout(() => { unmuteBtn.style.opacity = "0"; setTimeout(() => { unmuteBtn.style.display = "none"; }, 500); }, 2500);
           });
-      });
+      }
+
+      // START
+      wykryjPlikiIStartuj();
+
     </script>
   </body>
 </html>
