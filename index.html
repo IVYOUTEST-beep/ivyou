@@ -14,13 +14,12 @@
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: black; z-index: 99999;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
-        transition: opacity 1s ease-out;
+        transition: opacity 0.5s ease-out;
       }
       
       .pulsing-logo {
         width: 120px; 
         animation: breathe 2s infinite ease-in-out;
-        filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.6));
       }
       @keyframes breathe {
         0% { transform: scale(1); opacity: 1; }
@@ -36,21 +35,24 @@
       #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
       #vid { position: absolute; top: -10000px; visibility: hidden; }
 
+      /* POPRAWKA: Usunięto wielki czarny cień (box-shadow), zostawiono tylko złotą ramkę */
       .scan-frame-mask { 
         position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); 
         width: 70vw; height: 70vw; 
-        border: 2px solid rgba(212, 175, 55, 0.9); 
+        border: 3px solid #D4AF37; /* Złota ramka */
         border-radius: 20px; 
-        box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.85); 
+        /* Usunięto box-shadow, który zasłaniał ekran */
       }
+
       .logo-container { margin-top: 50px; z-index: 10000; }
-      .logo-img { height: 80px; display: block; filter: drop-shadow(0 5px 10px black); }
+      .logo-img { height: 80px; display: block; filter: drop-shadow(0 2px 5px black); }
       #fallback-logo { font-size: 30px; font-weight: 900; color: #D4AF37; letter-spacing: 5px; text-shadow: 2px 2px 10px black; }
       
       .instruction { 
-        position: absolute; top: 75%; color: #FDCF58; font-size: 13px; 
-        text-transform: uppercase; letter-spacing: 3px; font-weight: 600; 
+        position: absolute; top: 75%; color: #FDCF58; font-size: 14px; 
+        text-transform: uppercase; letter-spacing: 2px; font-weight: bold; 
         text-shadow: 0px 2px 5px black; z-index: 10000; text-align: center;
+        background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px;
       }
 
       /* PRZYCISKI */
@@ -59,13 +61,13 @@
         background: linear-gradient(135deg, #D4AF37, #B49228); 
         color: white; font-weight: 800; border: none; padding: 15px 40px; 
         border-radius: 50px; font-size: 14px; cursor: pointer; display: none; pointer-events: auto; 
-        box-shadow: 0 10px 30px rgba(212, 175, 55, 0.4); text-transform: uppercase; letter-spacing: 1px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-transform: uppercase; letter-spacing: 1px;
       }
       #websiteButton { 
         position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 10002; 
-        text-decoration: none; border: 1px solid #D4AF37; color: #D4AF37; 
+        text-decoration: none; border: 2px solid #D4AF37; color: #D4AF37; background: rgba(0,0,0,0.8);
         padding: 12px 30px; border-radius: 30px; font-size: 12px; 
-        letter-spacing: 2px; font-weight: bold; pointer-events: auto; background: rgba(0,0,0,0.8);
+        letter-spacing: 2px; font-weight: bold; pointer-events: auto; 
       }
       .a-enter-vr-button { display: none; }
     </style>
@@ -92,38 +94,29 @@
     <div id="ar-container"></div>
 
     <script>
-      // ==========================================
-      // GŁÓWNA KONFIGURACJA
-      // ==========================================
-      
-      // Zwiększyliśmy limit do 20. 
-      // Kod przygotuje miejsce na filmy od 0.mp4 do 19.mp4.
+      // 1. USTAWIENIA
       const MAX_SLOTS = 20; 
 
       const urlParams = new URLSearchParams(window.location.search);
       const klientID = urlParams.get('k');
 
-      // Obsługa błędu linku
       if (!klientID) {
           document.getElementById('loader-text').innerText = "BŁĄD LINKU";
           document.getElementById('loader-text').style.color = "red";
-          alert("Nie podałeś nazwy folderu w linku! (?k=...)");
+          alert("Brak nazwy folderu w linku! (?k=...)");
           throw new Error("Brak ID");
       }
 
-      // Ścieżki
       const folder = `./ivyou/${klientID}`;
       const mindFile = `${folder}/targets.mind`;
 
-      // 2. FUNKCJA STARTUJĄCA
+      // 2. START APLIKACJI
       function startApp() {
-          console.log("Start aplikacji dla folderu: " + folder);
-          console.log("Przygotowano slotów: " + MAX_SLOTS);
+          console.log("Start: " + folder);
           
           let html = `<a-scene mindar-image="imageTargetSrc: ${mindFile}; maxTrack: 1; filterMinCF:0.0001; filterBeta: 0.001" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">`;
           
           html += `<a-assets>`;
-          // Generujemy 20 slotów wideo "w ciemno"
           for(let i=0; i < MAX_SLOTS; i++) {
               html += `<video id="vid${i}" src="${folder}/${i}.mp4" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted autoplay></video>`;
           }
@@ -131,24 +124,22 @@
           
           html += `<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
 
-          // Generujemy 20 celów "w ciemno"
           for(let i=0; i < MAX_SLOTS; i++) {
+              // POPRAWKA: Usunięto opacity="0". Teraz jest domyślnie widoczne.
               html += `
               <a-entity mindar-image-target="targetIndex: ${i}" class="target-entity" data-id="${i}">
-                  <a-plane id="plane${i}" src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0" opacity="0"></a-plane>
+                  <a-plane id="plane${i}" src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0"></a-plane>
               </a-entity>`;
           }
           html += `</a-scene>`;
 
-          // Wstrzykujemy scenę
           document.getElementById('ar-container').innerHTML = html;
 
-          // 3. INTELIGENTNE SKALOWANIE (Auto-Fit)
+          // SKALOWANIE WIDEO
           for(let i=0; i < MAX_SLOTS; i++) {
               const videoEl = document.getElementById(`vid${i}`);
               const planeEl = document.getElementById(`plane${i}`);
               if(videoEl) {
-                  // Gdy wideo się załaduje, dopasuj wymiary
                   videoEl.addEventListener('loadedmetadata', () => {
                       const vW = videoEl.videoWidth;
                       const vH = videoEl.videoHeight;
@@ -156,17 +147,12 @@
                           const ratio = vH / vW;
                           planeEl.setAttribute("height", ratio);
                           planeEl.setAttribute("width", 1);
-                          console.log(`Załadowano wideo ${i}: ${vW}x${vH}`);
                       }
-                  });
-                  // Ignorujemy błędy (np. 404 dla pustych slotów)
-                  videoEl.addEventListener('error', () => {
-                      // To jest normalne, że sloty 5, 6... 19 będą zgłaszać błąd, jeśli nie ma plików
                   });
               }
           }
 
-          // 4. UKRYWANIE EKRANU ŁADOWANIA (Po 2.5 sekundach)
+          // UKRYWANIE LOADERA
           setTimeout(() => {
               const loader = document.getElementById('loader-screen');
               loader.style.opacity = "0";
@@ -174,7 +160,7 @@
                   loader.style.display = 'none'; 
                   document.getElementById('ui-layer').style.display = 'flex';
                   document.getElementById('websiteButton').style.display = 'flex';
-              }, 1000);
+              }, 500);
               
               initEvents();
           }, 2500); 
@@ -192,28 +178,30 @@
               const video = document.querySelector(`#vid${id}`);
               const plane = document.querySelector(`#plane${id}`);
               
-              // Sprawdzamy, czy wideo istnieje i jest gotowe
-              if(video && video.readyState > 0) { 
+              if(video) { 
                   video.play();
-                  if(plane) plane.setAttribute("animation", "property: opacity; to: 1; dur: 800; easing: easeOutQuad");
-                  
+                  // POPRAWKA: Wymuszamy odświeżenie wymiarów w momencie wykrycia
+                  if(video.videoWidth > 0 && plane) {
+                      const ratio = video.videoHeight / video.videoWidth;
+                      plane.setAttribute("height", ratio);
+                      plane.setAttribute("width", 1);
+                  }
+
                   unmuteBtn.style.display = "block";
-                  scanGuide.style.opacity = "0";
-                  scanText.style.opacity = "0";
+                  scanGuide.style.display = "none"; // Ukryj ramkę całkowicie
+                  scanText.style.display = "none";
               }
             });
 
             target.addEventListener("targetLost", event => {
               const id = target.getAttribute('data-id');
               const video = document.querySelector(`#vid${id}`);
-              const plane = document.querySelector(`#plane${id}`);
               
               if(video) video.pause();
-              if(plane) plane.setAttribute("opacity", "0"); 
 
               unmuteBtn.style.display = "none";
-              scanGuide.style.opacity = "1";
-              scanText.style.opacity = "1";
+              scanGuide.style.display = "block"; // Pokaż ramkę
+              scanText.style.display = "block";
             });
           });
 
@@ -225,7 +213,6 @@
           });
       }
 
-      // START
       startApp();
 
     </script>
