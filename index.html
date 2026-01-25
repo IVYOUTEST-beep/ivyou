@@ -8,7 +8,7 @@
 
     <style>
       body { margin: 0; overflow: hidden; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: black; }
-      
+     
       /* --- BRANDING ŁADOWANIA --- */
       #loader-screen {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -16,16 +16,16 @@
         display: flex; flex-direction: column; justify-content: center; align-items: center;
         text-align: center;
       }
-      
+     
       .pulsing-logo {
-        width: 120px; 
+        width: 120px;
         animation: breathe 3s infinite ease-in-out;
         filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.5));
       }
-      
+     
       @keyframes breathe {
         0% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.1); opacity: 0.7; } 
+        50% { transform: scale(1.1); opacity: 0.7; }
         100% { transform: scale(1); opacity: 1; }
       }
 
@@ -33,7 +33,7 @@
         margin-top: 20px; color: #D4AF37; font-size: 14px; letter-spacing: 4px; text-transform: uppercase;
         animation: fadeIn 2s; padding: 0 20px;
       }
-      
+     
       /* Styl wyświetlania błędów na ekranie */
       .error-msg {
         color: #ff4444; font-size: 12px; margin-top: 10px; letter-spacing: 1px;
@@ -46,13 +46,13 @@
       /* UI LAYER */
       #vid { position: absolute; top: -10000px; visibility: hidden; }
       #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
-      
-      .scan-frame-mask { 
-        position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); 
-        width: 70vw; height: 70vw; 
-        border: 2px solid rgba(212, 175, 55, 0.8); 
-        border-radius: 20px; 
-        box-shadow: 0 0 0 100vmax rgba(5, 4, 2, 0.9); 
+     
+      .scan-frame-mask {
+        position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
+        width: 70vw; height: 70vw;
+        border: 2px solid rgba(212, 175, 55, 0.8);
+        border-radius: 20px;
+        box-shadow: 0 0 0 100vmax rgba(5, 4, 2, 0.9);
       }
       .scan-frame-mask::before, .scan-frame-mask::after {
           content: ''; position: absolute; width: 40px; height: 40px; border-color: #D4AF37; border-style: solid;
@@ -64,34 +64,34 @@
       .logo-container { margin-top: 50px; z-index: 10000; }
       .logo-img { height: 80px; display: block; filter: drop-shadow(0 5px 15px rgba(0,0,0,1)); }
       #fallback-logo { font-size: 30px; font-weight: 900; color: #D4AF37; letter-spacing: 5px; text-shadow: 2px 2px 10px black; }
-      
-      .instruction { 
-        position: absolute; top: 75%; color: #FDCF58; font-size: 14px; 
-        text-transform: uppercase; letter-spacing: 3px; font-weight: 600; 
-        text-shadow: 0px 2px 10px black; z-index: 10000; text-align: center; 
+     
+      .instruction {
+        position: absolute; top: 75%; color: #FDCF58; font-size: 14px;
+        text-transform: uppercase; letter-spacing: 3px; font-weight: 600;
+        text-shadow: 0px 2px 10px black; z-index: 10000; text-align: center;
         background: rgba(0,0,0,0.4); padding: 10px 20px; border-radius: 30px;
         border: 1px solid rgba(212, 175, 55, 0.3);
       }
 
-      #unmuteButton { 
-        position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%) scale(0.9); z-index: 10001; 
-        background: linear-gradient(135deg, #D4AF37 0%, #B49228 100%); 
-        color: white; font-weight: 800; border: none; padding: 16px 40px; 
-        border-radius: 50px; font-size: 16px; cursor: pointer; display: none; pointer-events: auto; 
+      #unmuteButton {
+        position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%) scale(0.9); z-index: 10001;
+        background: linear-gradient(135deg, #D4AF37 0%, #B49228 100%);
+        color: white; font-weight: 800; border: none; padding: 16px 40px;
+        border-radius: 50px; font-size: 16px; cursor: pointer; display: none; pointer-events: auto;
         box-shadow: 0 10px 30px rgba(212, 175, 55, 0.3);
         transition: transform 0.2s;
         text-transform: uppercase; letter-spacing: 1px;
       }
       #unmuteButton:active { transform: translateX(-50%) scale(0.85); }
 
-      #websiteButton { 
-        position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 10002; 
-        text-decoration: none; 
-        background-color: rgba(10, 10, 10, 0.8); 
-        border: 1px solid #D4AF37; color: #D4AF37; 
-        padding: 12px 30px; border-radius: 30px; font-size: 12px; 
-        letter-spacing: 3px; font-weight: bold; pointer-events: auto; 
-        display: flex; align-items: center; gap: 10px; 
+      #websiteButton {
+        position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 10002;
+        text-decoration: none;
+        background-color: rgba(10, 10, 10, 0.8);
+        border: 1px solid #D4AF37; color: #D4AF37;
+        padding: 12px 30px; border-radius: 30px; font-size: 12px;
+        letter-spacing: 3px; font-weight: bold; pointer-events: auto;
+        display: flex; align-items: center; gap: 10px;
         backdrop-filter: blur(5px);
         transition: background 0.3s;
       }
@@ -138,12 +138,12 @@
 
       // 2. Detektyw Plików (Wersja Bezpieczna)
       async function wykryjPlikiIStartuj() {
-          const maxFilesToCheck = 50; 
+          const maxFilesToCheck = 50;
           let znalezionePliki = 0;
           const loaderText = document.getElementById('loader-text');
 
           console.log("Skanowanie folderu: " + folder);
-          
+         
           // Sprawdzamy pierwszy plik (0.mp4) żeby zobaczyć czy folder w ogóle istnieje
           try {
              // Używamy timestamp żeby ominąć cache przeglądarki
@@ -151,7 +151,7 @@
              if (!testCheck.ok) {
                  loaderText.innerText = "NIE ZNALEZIONO PLIKÓW";
                  errorLog.innerHTML = `Sprawdź GitHub!<br>Szukam pliku: <b>${folder}/0.mp4</b><br>Czy folder "${klientID}" istnieje?<br>Czy plik nazywa się "0.mp4"?`;
-                 
+                
                  // --- TRYB AWARYJNY ---
                  // Mimo błędu, spróbujmy uruchomić AR "na ślepo" po 5 sekundach
                  // Może to tylko błąd sieci, a plik tam jest
@@ -179,7 +179,7 @@
 
           if (znalezionePliki === 0) {
               // To się wykona tylko jeśli fetch 0.mp4 przeszedł, ale pętla nie (dziwne, ale możliwe)
-              uruchomAR(1); 
+              uruchomAR(1);
           } else {
               loaderText.innerText = "Wczytywanie...";
               uruchomAR(znalezionePliki);
@@ -188,9 +188,9 @@
 
       function uruchomAR(ilosc) {
           console.log("Uruchamiam AR dla " + ilosc + " plików.");
-          
+         
           let html = `<a-scene mindar-image="imageTargetSrc: ${mindFile}; maxTrack: 1; filterMinCF:0.0001; filterBeta: 0.001" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">`;
-          
+         
           html += `<a-assets>`;
           for(let i=0; i < ilosc; i++) {
               html += `<video id="vid${i}" src="${folder}/${i}.mp4" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted autoplay></video>`;
@@ -235,7 +235,7 @@
               document.getElementById('ui-layer').style.display = 'flex';
               document.getElementById('websiteButton').style.display = 'flex';
               initEvents();
-          }, 1500); 
+          }, 1500);
       }
 
       function initEvents() {
@@ -243,13 +243,13 @@
           const scanGuide = document.querySelector("#scan-guide");
           const scanText = document.querySelector("#scan-text");
           const targets = document.querySelectorAll('.target-entity');
-              
+             
           targets.forEach(target => {
             target.addEventListener("targetFound", event => {
               const id = target.getAttribute('data-id');
               const video = document.querySelector(`#vid${id}`);
               const plane = document.querySelector(`#plane${id}`);
-              
+             
               if(video) video.play();
               if(plane) plane.setAttribute("animation", "property: opacity; to: 1; dur: 800; easing: easeOutQuad");
 
@@ -265,9 +265,9 @@
               const id = target.getAttribute('data-id');
               const video = document.querySelector(`#vid${id}`);
               const plane = document.querySelector(`#plane${id}`);
-              
+             
               if(video) video.pause();
-              if(plane) plane.setAttribute("opacity", "0"); 
+              if(plane) plane.setAttribute("opacity", "0");
 
               unmuteBtn.style.display = "none";
               scanGuide.style.opacity = "1";
@@ -280,7 +280,7 @@
             document.querySelectorAll('video').forEach(v => { v.muted = false; v.volume = 1.0; });
             unmuteBtn.innerText = "Słuchasz IVYOU";
             unmuteBtn.style.background = "#27ae60";
-            setTimeout(() => { 
+            setTimeout(() => {
                 unmuteBtn.style.transform = "translateX(-50%) scale(0)";
                 setTimeout(() => { unmuteBtn.style.display = "none"; }, 300);
             }, 2000);
