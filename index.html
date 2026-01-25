@@ -4,71 +4,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <title>IVYOU - Luxury AR</title>
+    <title>IVYOU AR</title>
 
     <style>
-      body { margin: 0; overflow: hidden; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: black; }
+      body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: black; }
       
       /* --- EKRAN ŁADOWANIA --- */
       #loader-screen {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: black; z-index: 99999;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
-        transition: opacity 0.5s ease-out;
+        transition: opacity 0.5s;
+      }
+      .pulsing-logo { width: 100px; animation: breathe 2s infinite; }
+      @keyframes breathe { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } 100% { transform: scale(1); opacity: 1; } }
+      #loader-text { margin-top: 20px; color: #D4AF37; font-weight: bold; letter-spacing: 2px; }
+
+      /* --- CZYSTY UI (Bez zasłaniania kamery) --- */
+      #ui-layer { 
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        z-index: 9999; pointer-events: none; 
+        display: flex; flex-direction: column; align-items: center; 
+      }
+
+      /* RAMKA - TERAZ CAŁKOWICIE PRZEZROCZYSTA W ŚRODKU */
+      .scan-frame {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 70vw; height: 70vw;
+        border: 2px solid rgba(212, 175, 55, 0.8); /* Tylko złota linia */
+        border-radius: 20px;
+        /* ZERO cienia, ZERO tła - kamera będzie widoczna w 100% */
       }
       
-      .pulsing-logo {
-        width: 120px; 
-        animation: breathe 2s infinite ease-in-out;
-      }
-      @keyframes breathe {
-        0% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.1); opacity: 0.8; } 
-        100% { transform: scale(1); opacity: 1; }
-      }
+      /* Ozdobne rogi (opcjonalne, dla stylu) */
+      .scan-frame::before { content: ''; position: absolute; top: -5px; left: -5px; width: 20px; height: 20px; border-top: 5px solid #D4AF37; border-left: 5px solid #D4AF37; border-top-left-radius: 20px; }
+      .scan-frame::after { content: ''; position: absolute; bottom: -5px; right: -5px; width: 20px; height: 20px; border-bottom: 5px solid #D4AF37; border-right: 5px solid #D4AF37; border-bottom-right-radius: 20px; }
 
-      #loader-text {
-        margin-top: 25px; color: #D4AF37; font-size: 14px; letter-spacing: 5px; text-transform: uppercase; font-weight: bold;
-      }
-
-      /* --- UI APLIKACJI --- */
-      #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
-      #vid { position: absolute; top: -10000px; visibility: hidden; }
-
-      /* --- POPRAWKA TUTAJ: USUNIĘTO box-shadow --- */
-      .scan-frame-mask { 
-        position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); 
-        width: 70vw; height: 70vw; 
-        border: 3px solid #D4AF37; /* Tylko złota ramka */
-        border-radius: 20px; 
-        /* Usunięto cieniowanie, które zasłaniało kamerę */
-      }
-
-      .logo-container { margin-top: 50px; z-index: 10000; }
-      .logo-img { height: 80px; display: block; filter: drop-shadow(0 2px 5px black); }
-      #fallback-logo { font-size: 30px; font-weight: 900; color: #D4AF37; letter-spacing: 5px; text-shadow: 2px 2px 10px black; }
-      
+      .logo-img { margin-top: 40px; height: 60px; filter: drop-shadow(0 2px 4px black); }
       .instruction { 
-        position: absolute; top: 75%; color: #FDCF58; font-size: 14px; 
-        text-transform: uppercase; letter-spacing: 2px; font-weight: bold; 
-        text-shadow: 0px 2px 5px black; z-index: 10000; text-align: center;
-        background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px;
+        position: absolute; bottom: 15%; 
+        color: #D4AF37; font-size: 14px; font-weight: bold; letter-spacing: 1px;
+        text-shadow: 1px 1px 2px black; text-align: center; width: 100%;
       }
 
       /* PRZYCISKI */
-      #unmuteButton { 
-        position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); z-index: 10001; 
-        background: linear-gradient(135deg, #D4AF37, #B49228); 
-        color: white; font-weight: 800; border: none; padding: 15px 40px; 
-        border-radius: 50px; font-size: 14px; cursor: pointer; display: none; pointer-events: auto; 
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-transform: uppercase; letter-spacing: 1px;
+      #unmuteButton {
+        position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 10001;
+        background: #D4AF37; color: black; border: none; padding: 12px 30px; 
+        border-radius: 30px; font-weight: bold; cursor: pointer; display: none; pointer-events: auto;
       }
-      #websiteButton { 
-        position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 10002; 
-        text-decoration: none; border: 2px solid #D4AF37; color: #D4AF37; background: rgba(0,0,0,0.8);
-        padding: 12px 30px; border-radius: 30px; font-size: 12px; 
-        letter-spacing: 2px; font-weight: bold; pointer-events: auto; 
+      #websiteButton {
+        position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); z-index: 10002;
+        color: #D4AF37; text-decoration: none; border: 1px solid #D4AF37; 
+        padding: 10px 25px; border-radius: 30px; font-size: 12px; pointer-events: auto; background: rgba(0,0,0,0.5);
       }
+      
+      /* Ukrywamy wideo systemowe (to poza AR) */
+      #vid-hidden { position: absolute; top: -10000px; }
       .a-enter-vr-button { display: none; }
     </style>
   </head>
@@ -76,51 +68,44 @@
 
     <div id="loader-screen">
         <img src="./logo.png" class="pulsing-logo" onerror="this.style.display='none';">
-        <div id="loader-text">IVYOU AR</div>
+        <div id="loader-text">ŁADOWANIE...</div>
     </div>
 
     <div id="ui-layer" style="display:none;">
-      <div class="logo-container">
-        <img src="./logo.png" class="logo-img" alt="IVYOU" onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='block';">
-        <div id="fallback-logo" style="display:none;">IVYOU</div>
-      </div>
-      <div id="scan-guide" class="scan-frame-mask"></div>
-      <div id="scan-text" class="instruction">Skieruj kamerę na zdjęcie</div>
+      <img src="./logo.png" class="logo-img" onerror="this.style.display='none';">
+      <div id="scan-guide" class="scan-frame"></div>
+      <div id="scan-text" class="instruction">SKIERUJ KAMERĘ NA ZDJĘCIE</div>
     </div>
-    
-    <button id="unmuteButton">🔊 Włącz Dźwięk</button>
+
+    <button id="unmuteButton">🔊 WŁĄCZ DŹWIĘK</button>
     <a href="https://ivyou.pl" target="_blank" id="websiteButton" style="display:none;">IVYOU.PL</a>
 
     <div id="ar-container"></div>
 
     <script>
-      // ==========================================
-      // USTAWIENIA - LIMIT 20 ZDJĘĆ (FORCE START)
-      // ==========================================
+      // === KONFIGURACJA ===
       const MAX_SLOTS = 20; 
-
       const urlParams = new URLSearchParams(window.location.search);
       const klientID = urlParams.get('k');
 
       if (!klientID) {
-          document.getElementById('loader-text').innerText = "BŁĄD LINKU";
-          document.getElementById('loader-text').style.color = "red";
-          alert("Brak nazwy folderu w linku! (?k=...)");
+          alert("BŁĄD: Brak folderu w linku (?k=...)");
           throw new Error("Brak ID");
       }
 
       const folder = `./ivyou/${klientID}`;
       const mindFile = `${folder}/targets.mind`;
 
-      // 2. START APLIKACJI (Bez sprawdzania plików - start natychmiastowy)
       function startApp() {
-          console.log("Start: " + folder);
-          
+          console.log("Uruchamianie dla: " + folder);
+
+          // BUDOWANIE SCENY
+          // WAŻNE: Dodano 'targetIndex' i pętlę generującą
           let html = `<a-scene mindar-image="imageTargetSrc: ${mindFile}; maxTrack: 1; filterMinCF:0.0001; filterBeta: 0.001" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">`;
           
           html += `<a-assets>`;
-          // Generujemy 20 slotów na sztywno
           for(let i=0; i < MAX_SLOTS; i++) {
+              // playsinline jest kluczowe dla iPhone'ów
               html += `<video id="vid${i}" src="${folder}/${i}.mp4" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted autoplay></video>`;
           }
           html += `</a-assets>`;
@@ -128,47 +113,45 @@
           html += `<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
 
           for(let i=0; i < MAX_SLOTS; i++) {
-              // UWAGA: Opacity ustawione na 1 (widoczne od razu)
+              // --- NAJWAŻNIEJSZA ZMIANA ---
+              // material="shader: flat" -> To naprawia "czarne wideo" (niewidzialne).
+              // width="1" height="1" -> Domyślny rozmiar (zabezpieczenie).
               html += `
               <a-entity mindar-image-target="targetIndex: ${i}" class="target-entity" data-id="${i}">
-                  <a-plane id="plane${i}" src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0"></a-plane>
+                  <a-plane id="plane${i}" src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0" material="shader: flat; opacity: 1;"></a-plane>
               </a-entity>`;
           }
           html += `</a-scene>`;
 
           document.getElementById('ar-container').innerHTML = html;
 
-          // 3. INTELIGENTNE DOPASOWANIE WYMIARÓW (Auto-Fit)
+          // SKALOWANIE WIDEO (Auto-Fit)
           for(let i=0; i < MAX_SLOTS; i++) {
               const videoEl = document.getElementById(`vid${i}`);
               const planeEl = document.getElementById(`plane${i}`);
+              
               if(videoEl) {
-                  // Kiedy wideo pobierze informacje o swoich wymiarach
                   videoEl.addEventListener('loadedmetadata', () => {
-                      const vW = videoEl.videoWidth;
-                      const vH = videoEl.videoHeight;
-                      if(vW > 0 && vH > 0) {
-                          const ratio = vH / vW; // Obliczamy proporcje
+                      // Jeśli wideo ma wymiary, dopasuj AR
+                      if(videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
+                          const ratio = videoEl.videoHeight / videoEl.videoWidth;
                           planeEl.setAttribute("height", ratio);
                           planeEl.setAttribute("width", 1);
-                          console.log(`Dopasowano wideo ${i}: ratio ${ratio}`);
                       }
                   });
               }
           }
 
-          // 4. UKRYWANIE EKRANU ŁADOWANIA (Po 2.5s)
+          // UKRYJ LOADER PO 3 SEKUNDACH
           setTimeout(() => {
-              const loader = document.getElementById('loader-screen');
-              loader.style.opacity = "0";
-              setTimeout(() => { 
-                  loader.style.display = 'none'; 
+              document.getElementById('loader-screen').style.opacity = '0';
+              setTimeout(() => {
+                  document.getElementById('loader-screen').style.display = 'none';
                   document.getElementById('ui-layer').style.display = 'flex';
                   document.getElementById('websiteButton').style.display = 'flex';
               }, 500);
-              
               initEvents();
-          }, 2500); 
+          }, 2500);
       }
 
       function initEvents() {
@@ -176,52 +159,57 @@
           const scanGuide = document.querySelector("#scan-guide");
           const scanText = document.querySelector("#scan-text");
           const targets = document.querySelectorAll('.target-entity');
-              
+
           targets.forEach(target => {
-            target.addEventListener("targetFound", event => {
-              const id = target.getAttribute('data-id');
-              const video = document.querySelector(`#vid${id}`);
-              const plane = document.querySelector(`#plane${id}`);
-              
-              if(video) { 
-                  video.play();
-                  
-                  // DODATKOWE ZABEZPIECZENIE: Wymuś dopasowanie wymiarów przy wykryciu
-                  if(video.videoWidth > 0 && plane) {
-                      const ratio = video.videoHeight / video.videoWidth;
-                      plane.setAttribute("height", ratio);
-                      plane.setAttribute("width", 1);
+              target.addEventListener("targetFound", event => {
+                  console.log("Wykryto cel!");
+                  const id = target.getAttribute('data-id');
+                  const video = document.querySelector(`#vid${id}`);
+                  const plane = document.querySelector(`#plane${id}`);
+
+                  if(video) {
+                      video.play();
+                      // Upewniamy się, że wideo jest głośne
+                      // (Użytkownik musi kliknąć przycisk, żeby odblokować dźwięk w przeglądarce)
+                      
+                      // Dopasowanie awaryjne (jeśli loadedmetadata nie zadziałało wcześniej)
+                      if(plane && video.videoWidth > 0) {
+                          const ratio = video.videoHeight / video.videoWidth;
+                          plane.setAttribute("height", ratio);
+                      }
+
+                      unmuteBtn.style.display = "block";
+                      scanGuide.style.display = "none";
+                      scanText.style.display = "none";
                   }
+              });
 
-                  unmuteBtn.style.display = "block";
-                  scanGuide.style.display = "none"; // Ukryj ramkę
-                  scanText.style.display = "none";
-              }
-            });
+              target.addEventListener("targetLost", event => {
+                  console.log("Zgubiono cel");
+                  const id = target.getAttribute('data-id');
+                  const video = document.querySelector(`#vid${id}`);
+                  if(video) video.pause();
 
-            target.addEventListener("targetLost", event => {
-              const id = target.getAttribute('data-id');
-              const video = document.querySelector(`#vid${id}`);
-              
-              if(video) video.pause();
-
-              unmuteBtn.style.display = "none";
-              scanGuide.style.display = "block"; // Pokaż ramkę
-              scanText.style.display = "block";
-            });
+                  unmuteBtn.style.display = "none";
+                  scanGuide.style.display = "block";
+                  scanText.style.display = "block";
+              });
           });
 
+          // OBSŁUGA DŹWIĘKU
           unmuteBtn.addEventListener("click", () => {
-            document.querySelectorAll('video').forEach(v => { v.muted = false; v.volume = 1.0; });
-            unmuteBtn.innerText = "Słuchasz IVYOU";
-            unmuteBtn.style.background = "#27ae60";
-            setTimeout(() => { unmuteBtn.style.display = "none"; }, 2000);
+              document.querySelectorAll('video').forEach(v => {
+                  v.muted = false;
+                  v.volume = 1.0;
+              });
+              unmuteBtn.innerText = "SŁUCHASZ IVYOU";
+              unmuteBtn.style.background = "#2ecc71"; // Zielony
+              setTimeout(() => { unmuteBtn.style.display = "none"; }, 2000);
           });
       }
 
-      // URUCHOM
+      // START
       startApp();
-
     </script>
   </body>
 </html>
