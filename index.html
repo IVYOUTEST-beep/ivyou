@@ -4,128 +4,122 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <title>IVYOU - Luxury AR</title>
+    <title>IVYOU AR - Auto Size</title>
 
     <style>
-      body { margin: 0; overflow: hidden; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: black; }
+      body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: black; }
       
-      /* --- EKRAN ŁADOWANIA --- */
+      /* EKRAN ŁADOWANIA */
       #loader-screen {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: black; z-index: 99999;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
-        transition: opacity 0.5s ease-out;
+        color: #D4AF37;
       }
-      
-      .pulsing-logo {
-        width: 120px; 
-        animation: breathe 2s infinite ease-in-out;
+      .spinner {
+        width: 50px; height: 50px; border: 5px solid #333; border-top: 5px solid #D4AF37; border-radius: 50%;
+        animation: spin 1s linear infinite; margin-bottom: 20px;
       }
-      @keyframes breathe {
-        0% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.1); opacity: 0.8; } 
-        100% { transform: scale(1); opacity: 1; }
-      }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-      #loader-text {
-        margin-top: 25px; color: #D4AF37; font-size: 14px; letter-spacing: 5px; text-transform: uppercase; font-weight: bold;
-      }
-
-      /* --- UI APLIKACJI --- */
-      #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
+      /* UI LAYER */
       #vid { position: absolute; top: -10000px; visibility: hidden; }
-
-      /* POPRAWKA: Usunięto wielki czarny cień (box-shadow), zostawiono tylko złotą ramkę */
+      #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
+      
+      /* RAMKA - Teraz trochę większa, żeby pasowała do różnych kształtów */
       .scan-frame-mask { 
         position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); 
-        width: 70vw; height: 70vw; 
-        border: 3px solid #D4AF37; /* Złota ramka */
-        border-radius: 20px; 
-        /* Usunięto box-shadow, który zasłaniał ekran */
+        width: 70vw; height: 70vw; /* Kwadratowa ramka jako celownik */
+        border: 2px dashed rgba(212, 175, 55, 0.5); /* Lżejsza ramka */
+        border-radius: 12px; 
+        box-shadow: 0 0 0 100vmax rgba(10, 8, 3, 0.85); 
       }
-
-      .logo-container { margin-top: 50px; z-index: 10000; }
-      .logo-img { height: 80px; display: block; filter: drop-shadow(0 2px 5px black); }
-      #fallback-logo { font-size: 30px; font-weight: 900; color: #D4AF37; letter-spacing: 5px; text-shadow: 2px 2px 10px black; }
       
-      .instruction { 
-        position: absolute; top: 75%; color: #FDCF58; font-size: 14px; 
-        text-transform: uppercase; letter-spacing: 2px; font-weight: bold; 
-        text-shadow: 0px 2px 5px black; z-index: 10000; text-align: center;
-        background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px;
-      }
-
-      /* PRZYCISKI */
-      #unmuteButton { 
-        position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); z-index: 10001; 
-        background: linear-gradient(135deg, #D4AF37, #B49228); 
-        color: white; font-weight: 800; border: none; padding: 15px 40px; 
-        border-radius: 50px; font-size: 14px; cursor: pointer; display: none; pointer-events: auto; 
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-transform: uppercase; letter-spacing: 1px;
-      }
-      #websiteButton { 
-        position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 10002; 
-        text-decoration: none; border: 2px solid #D4AF37; color: #D4AF37; background: rgba(0,0,0,0.8);
-        padding: 12px 30px; border-radius: 30px; font-size: 12px; 
-        letter-spacing: 2px; font-weight: bold; pointer-events: auto; 
-      }
+      .logo-container { margin-top: 40px; z-index: 10000; }
+      .logo-img { height: 70px; display: block; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.9)); }
+      #fallback-logo { font-size: 30px; font-weight: 900; color: #D4AF37; letter-spacing: 5px; text-shadow: 2px 2px 10px black; }
+      .instruction { position: absolute; top: 70%; color: #D4AF37; font-size: 16px; text-transform: uppercase; letter-spacing: 4px; font-weight: bold; text-shadow: 1px 1px 5px black; z-index: 10000; text-align: center; }
+      #unmuteButton { position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); z-index: 10001; background: linear-gradient(135deg, #D4AF37 0%, #FDCF58 100%); color: black; font-weight: 900; border: none; padding: 15px 50px; border-radius: 50px; font-size: 16px; cursor: pointer; display: none; pointer-events: auto; box-shadow: 0 10px 25px rgba(212, 175, 55, 0.4); }
+      #websiteButton { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 10002; text-decoration: none; background-color: rgba(0, 0, 0, 0.6); border: 1px solid #D4AF37; color: #D4AF37; padding: 12px 25px; border-radius: 30px; font-size: 14px; letter-spacing: 2px; font-weight: bold; pointer-events: auto; display: flex; align-items: center; gap: 10px; }
       .a-enter-vr-button { display: none; }
     </style>
   </head>
   <body>
 
     <div id="loader-screen">
-        <img src="./logo.png" class="pulsing-logo" onerror="this.style.display='none';">
-        <div id="loader-text">IVYOU AR</div>
+        <div class="spinner"></div>
+        <div id="loader-text">Szukam magii...</div>
     </div>
 
     <div id="ui-layer" style="display:none;">
       <div class="logo-container">
-        <img src="./logo.png" class="logo-img" alt="IVYOU" onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='block';">
+        <img src="./logo.png" class="logo-img" alt="IVYOU AR" onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='block';">
         <div id="fallback-logo" style="display:none;">IVYOU</div>
       </div>
       <div id="scan-guide" class="scan-frame-mask"></div>
-      <div id="scan-text" class="instruction">Skieruj kamerę na zdjęcie</div>
+      <div id="scan-text" class="instruction">Skieruj wizjer na zdjęcie</div>
     </div>
-    
-    <button id="unmuteButton">🔊 Włącz Dźwięk</button>
+    <button id="unmuteButton">🔊 ODBLOKUJ DŹWIĘK</button>
     <a href="https://ivyou.pl" target="_blank" id="websiteButton" style="display:none;">IVYOU.PL</a>
 
     <div id="ar-container"></div>
 
     <script>
-      // 1. USTAWIENIA
-      const MAX_SLOTS = 20; 
-
+      // 1. Konfiguracja
       const urlParams = new URLSearchParams(window.location.search);
       const klientID = urlParams.get('k');
 
       if (!klientID) {
-          document.getElementById('loader-text').innerText = "BŁĄD LINKU";
-          document.getElementById('loader-text').style.color = "red";
-          alert("Brak nazwy folderu w linku! (?k=...)");
-          throw new Error("Brak ID");
+          document.getElementById('loader-text').innerText = "BŁĄD: Brak nazwy folderu w linku (?k=...)";
+          document.querySelector('.spinner').style.borderTopColor = "red";
+          throw new Error("Stop");
       }
 
       const folder = `./ivyou/${klientID}`;
       const mindFile = `${folder}/targets.mind`;
 
-      // 2. START APLIKACJI
-      function startApp() {
-          console.log("Start: " + folder);
-          
-          let html = `<a-scene mindar-image="imageTargetSrc: ${mindFile}; maxTrack: 1; filterMinCF:0.0001; filterBeta: 0.001" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">`;
+      // 2. Detektyw Plików
+      async function wykryjPlikiIStartuj() {
+          const maxFilesToCheck = 50; 
+          let znalezionePliki = 0;
+          const loaderText = document.getElementById('loader-text');
+
+          console.log("Skanowanie: " + folder);
+
+          for (let i = 0; i < maxFilesToCheck; i++) {
+              loaderText.innerText = `Sprawdzam: ${i}.mp4...`;
+              try {
+                  const response = await fetch(`${folder}/${i}.mp4`, { method: 'HEAD' });
+                  if (response.ok) {
+                      znalezionePliki++;
+                  } else {
+                      break; 
+                  }
+              } catch (e) { break; }
+          }
+
+          if (znalezionePliki === 0) {
+              loaderText.innerText = "Nie znaleziono filmów (0.mp4)!";
+              document.querySelector('.spinner').style.borderTopColor = "red";
+              return;
+          }
+
+          loaderText.innerText = "Kalibracja wymiarów...";
+          uruchomAR(znalezionePliki);
+      }
+
+      function uruchomAR(ilosc) {
+          let html = `<a-scene mindar-image="imageTargetSrc: ${mindFile}; maxTrack: 1" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">`;
           
           html += `<a-assets>`;
-          for(let i=0; i < MAX_SLOTS; i++) {
+          for(let i=0; i < ilosc; i++) {
               html += `<video id="vid${i}" src="${folder}/${i}.mp4" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted autoplay></video>`;
           }
           html += `</a-assets>`;
-          
           html += `<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
 
-          for(let i=0; i < MAX_SLOTS; i++) {
-              // POPRAWKA: Usunięto opacity="0". Teraz jest domyślnie widoczne.
+          for(let i=0; i < ilosc; i++) {
+              // UWAGA: Tutaj nie ustawiamy height/width, zrobi to skrypt poniżej
               html += `
               <a-entity mindar-image-target="targetIndex: ${i}" class="target-entity" data-id="${i}">
                   <a-plane id="plane${i}" src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0"></a-plane>
@@ -135,35 +129,36 @@
 
           document.getElementById('ar-container').innerHTML = html;
 
-          // SKALOWANIE WIDEO
-          for(let i=0; i < MAX_SLOTS; i++) {
+          // --- TUTAJ JEST MAGIA SKALOWANIA ---
+          // Czekamy aż wideo pobierze swoje metadane (wymiary) i dopasowujemy plane
+          for(let i=0; i < ilosc; i++) {
               const videoEl = document.getElementById(`vid${i}`);
               const planeEl = document.getElementById(`plane${i}`);
+              
               if(videoEl) {
                   videoEl.addEventListener('loadedmetadata', () => {
                       const vW = videoEl.videoWidth;
                       const vH = videoEl.videoHeight;
+                      
                       if(vW > 0 && vH > 0) {
+                          // Obliczamy proporcje
                           const ratio = vH / vW;
+                          // Ustawiamy szerokość na 1 (standard AR), a wysokość dopasowujemy
                           planeEl.setAttribute("height", ratio);
                           planeEl.setAttribute("width", 1);
+                          console.log(`Dopasowano wideo ${i}: ${vW}x${vH} -> Ratio: ${ratio}`);
                       }
                   });
               }
           }
+          // ------------------------------------
 
-          // UKRYWANIE LOADERA
           setTimeout(() => {
-              const loader = document.getElementById('loader-screen');
-              loader.style.opacity = "0";
-              setTimeout(() => { 
-                  loader.style.display = 'none'; 
-                  document.getElementById('ui-layer').style.display = 'flex';
-                  document.getElementById('websiteButton').style.display = 'flex';
-              }, 500);
-              
+              document.getElementById('loader-screen').style.display = 'none';
+              document.getElementById('ui-layer').style.display = 'flex';
+              document.getElementById('websiteButton').style.display = 'flex';
               initEvents();
-          }, 2500); 
+          }, 1500); 
       }
 
       function initEvents() {
@@ -176,44 +171,35 @@
             target.addEventListener("targetFound", event => {
               const id = target.getAttribute('data-id');
               const video = document.querySelector(`#vid${id}`);
-              const plane = document.querySelector(`#plane${id}`);
+              if(video) video.play();
               
-              if(video) { 
-                  video.play();
-                  // POPRAWKA: Wymuszamy odświeżenie wymiarów w momencie wykrycia
-                  if(video.videoWidth > 0 && plane) {
-                      const ratio = video.videoHeight / video.videoWidth;
-                      plane.setAttribute("height", ratio);
-                      plane.setAttribute("width", 1);
-                  }
-
-                  unmuteBtn.style.display = "block";
-                  scanGuide.style.display = "none"; // Ukryj ramkę całkowicie
-                  scanText.style.display = "none";
-              }
+              unmuteBtn.style.display = "block";
+              scanGuide.style.opacity = "0";
+              scanText.style.opacity = "0";
             });
 
             target.addEventListener("targetLost", event => {
               const id = target.getAttribute('data-id');
               const video = document.querySelector(`#vid${id}`);
-              
               if(video) video.pause();
-
+              
               unmuteBtn.style.display = "none";
-              scanGuide.style.display = "block"; // Pokaż ramkę
-              scanText.style.display = "block";
+              scanGuide.style.opacity = "1";
+              scanText.style.opacity = "1";
             });
           });
 
           unmuteBtn.addEventListener("click", () => {
             document.querySelectorAll('video').forEach(v => { v.muted = false; v.volume = 1.0; });
-            unmuteBtn.innerText = "Słuchasz IVYOU";
-            unmuteBtn.style.background = "#27ae60";
-            setTimeout(() => { unmuteBtn.style.display = "none"; }, 2000);
+            unmuteBtn.innerText = "🎵 Odtwarzanie...";
+            unmuteBtn.style.background = "linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)";
+            unmuteBtn.style.color = "white";
+            setTimeout(() => { unmuteBtn.style.opacity = "0"; setTimeout(() => { unmuteBtn.style.display = "none"; }, 500); }, 2500);
           });
       }
 
-      startApp();
+      // START
+      wykryjPlikiIStartuj();
 
     </script>
   </body>
