@@ -4,12 +4,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <title>IVYOU AR - Auto Detect</title>
+    <title>IVYOU AR - Auto Size</title>
 
     <style>
       body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: black; }
       
-      /* EKRAN ŁADOWANIA (Widoczny podczas skanowania) */
+      /* EKRAN ŁADOWANIA */
       #loader-screen {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: black; z-index: 99999;
@@ -22,10 +22,19 @@
       }
       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-      /* Reszta stylów bez zmian */
+      /* UI LAYER */
       #vid { position: absolute; top: -10000px; visibility: hidden; }
       #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
-      .scan-frame-mask { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); width: 65vw; height: 65vw; border: 3px solid #D4AF37; border-radius: 12px; box-shadow: 0 0 0 100vmax rgba(10, 8, 3, 0.85); }
+      
+      /* RAMKA - Teraz trochę większa, żeby pasowała do różnych kształtów */
+      .scan-frame-mask { 
+        position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); 
+        width: 70vw; height: 70vw; /* Kwadratowa ramka jako celownik */
+        border: 2px dashed rgba(212, 175, 55, 0.5); /* Lżejsza ramka */
+        border-radius: 12px; 
+        box-shadow: 0 0 0 100vmax rgba(10, 8, 3, 0.85); 
+      }
+      
       .logo-container { margin-top: 40px; z-index: 10000; }
       .logo-img { height: 70px; display: block; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.9)); }
       #fallback-logo { font-size: 30px; font-weight: 900; color: #D4AF37; letter-spacing: 5px; text-shadow: 2px 2px 10px black; }
@@ -42,7 +51,8 @@
         <div id="loader-text">Szukam magii...</div>
     </div>
 
-    <div id="ui-layer" style="display:none;"> <div class="logo-container">
+    <div id="ui-layer" style="display:none;">
+      <div class="logo-container">
         <img src="./logo.png" class="logo-img" alt="IVYOU AR" onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='block';">
         <div id="fallback-logo" style="display:none;">IVYOU</div>
       </div>
@@ -55,7 +65,7 @@
     <div id="ar-container"></div>
 
     <script>
-      // --- KROK 1: Konfiguracja ---
+      // 1. Konfiguracja
       const urlParams = new URLSearchParams(window.location.search);
       const klientID = urlParams.get('k');
 
@@ -68,50 +78,37 @@
       const folder = `./ivyou/${klientID}`;
       const mindFile = `${folder}/targets.mind`;
 
-      // --- KROK 2: Detektyw Plików (Funkcja Async) ---
+      // 2. Detektyw Plików
       async function wykryjPlikiIStartuj() {
-          const maxFilesToCheck = 50; // Maksymalnie sprawdzimy 50 plików, żeby nie zwiesić przeglądarki
+          const maxFilesToCheck = 50; 
           let znalezionePliki = 0;
           const loaderText = document.getElementById('loader-text');
 
-          console.log("Rozpoczynam skanowanie plików w: " + folder);
+          console.log("Skanowanie: " + folder);
 
-          // Pętla sprawdzająca pliki po kolei: 0.mp4, 1.mp4...
           for (let i = 0; i < maxFilesToCheck; i++) {
-              loaderText.innerText = `Skanuję plik: ${i}.mp4...`;
+              loaderText.innerText = `Sprawdzam: ${i}.mp4...`;
               try {
-                  // "Pingujemy" plik (metoda HEAD pobiera tylko nagłówki, jest super szybka)
                   const response = await fetch(`${folder}/${i}.mp4`, { method: 'HEAD' });
-                  
                   if (response.ok) {
                       znalezionePliki++;
-                      console.log(`Znaleziono: ${i}.mp4`);
                   } else {
-                      // Jeśli trafimy na błąd (np. 404), przerywamy pętlę. Koniec albumu.
-                      console.log(`Nie znaleziono: ${i}.mp4. Koniec skanowania.`);
                       break; 
                   }
-              } catch (e) {
-                  console.log("Błąd sieci przy pliku " + i);
-                  break;
-              }
+              } catch (e) { break; }
           }
 
           if (znalezionePliki === 0) {
-              loaderText.innerText = "BŁĄD: Nie znaleziono żadnych filmów (0.mp4) w folderze!";
+              loaderText.innerText = "Nie znaleziono filmów (0.mp4)!";
               document.querySelector('.spinner').style.borderTopColor = "red";
               return;
           }
 
-          console.log(`Zakończono. Razem filmów: ${znalezionePliki}`);
-          loaderText.innerText = "Ładowanie silnika AR...";
-
-          // --- KROK 3: Budowanie Sceny AR ---
+          loaderText.innerText = "Kalibracja wymiarów...";
           uruchomAR(znalezionePliki);
       }
 
       function uruchomAR(ilosc) {
-          // Budujemy kod HTML sceny w pamięci
           let html = `<a-scene mindar-image="imageTargetSrc: ${mindFile}; maxTrack: 1" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">`;
           
           html += `<a-assets>`;
@@ -119,29 +116,49 @@
               html += `<video id="vid${i}" src="${folder}/${i}.mp4" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted autoplay></video>`;
           }
           html += `</a-assets>`;
-          
           html += `<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
 
           for(let i=0; i < ilosc; i++) {
+              // UWAGA: Tutaj nie ustawiamy height/width, zrobi to skrypt poniżej
               html += `
               <a-entity mindar-image-target="targetIndex: ${i}" class="target-entity" data-id="${i}">
-                  <a-plane src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0"></a-plane>
+                  <a-plane id="plane${i}" src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0"></a-plane>
               </a-entity>`;
           }
           html += `</a-scene>`;
 
-          // Wstrzykujemy scenę do strony
           document.getElementById('ar-container').innerHTML = html;
 
-          // Ukrywamy loader, pokazujemy UI
+          // --- TUTAJ JEST MAGIA SKALOWANIA ---
+          // Czekamy aż wideo pobierze swoje metadane (wymiary) i dopasowujemy plane
+          for(let i=0; i < ilosc; i++) {
+              const videoEl = document.getElementById(`vid${i}`);
+              const planeEl = document.getElementById(`plane${i}`);
+              
+              if(videoEl) {
+                  videoEl.addEventListener('loadedmetadata', () => {
+                      const vW = videoEl.videoWidth;
+                      const vH = videoEl.videoHeight;
+                      
+                      if(vW > 0 && vH > 0) {
+                          // Obliczamy proporcje
+                          const ratio = vH / vW;
+                          // Ustawiamy szerokość na 1 (standard AR), a wysokość dopasowujemy
+                          planeEl.setAttribute("height", ratio);
+                          planeEl.setAttribute("width", 1);
+                          console.log(`Dopasowano wideo ${i}: ${vW}x${vH} -> Ratio: ${ratio}`);
+                      }
+                  });
+              }
+          }
+          // ------------------------------------
+
           setTimeout(() => {
               document.getElementById('loader-screen').style.display = 'none';
               document.getElementById('ui-layer').style.display = 'flex';
               document.getElementById('websiteButton').style.display = 'flex';
-              
-              // Inicjujemy obsługę zdarzeń (logika z poprzedniego kodu)
               initEvents();
-          }, 1000); // Małe opóźnienie dla pewności
+          }, 1500); 
       }
 
       function initEvents() {
@@ -159,8 +176,6 @@
               unmuteBtn.style.display = "block";
               scanGuide.style.opacity = "0";
               scanText.style.opacity = "0";
-              scanGuide.style.transition = "opacity 0.8s ease-out";
-              scanText.style.transition = "opacity 0.8s ease-out";
             });
 
             target.addEventListener("targetLost", event => {
