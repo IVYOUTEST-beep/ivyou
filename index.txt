@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
 
     <script>
-      // SHADER: Magic Blend (Miękkie krawędzie)
+      // SHADER: Magic Blend
       AFRAME.registerShader('magic-blend', {
         schema: {
           src: {type: 'map', is: 'uniform'},
@@ -38,167 +38,78 @@
     </script>
 
     <style>
-      /* --- FUNDAMENTY --- */
       html, body {
         margin: 0; padding: 0; width: 100%; height: 100%;
         background-color: black !important;
         overflow: hidden; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
-
       video {
-        position: absolute !important;
-        top: 50% !important; left: 50% !important;
+        position: absolute !important; top: 50% !important; left: 50% !important;
         transform: translate(-50%, -50%) !important;
         min-width: 102vw !important; min-height: 102vh !important;
-        width: auto !important; height: auto !important;
-        object-fit: cover !important;
+        width: auto !important; height: auto !important; object-fit: cover !important;
         z-index: -2 !important; display: block !important;
       }
-
-      #ar-container {
-        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 1; background: transparent !important;
-      }
-      
+      #ar-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; background: transparent !important; }
       .a-enter-vr-button { display: none; }
 
-      /* --- EKRAN STARTOWY --- */
+      /* UI START */
       #start-screen {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 99999;
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 99999;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
         background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
       }
-      
-      .logo-start { 
-        width: 180px; margin-bottom: 60px; 
-        filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.3));
-        animation: floatLogo 3s ease-in-out infinite;
-      }
-
+      .logo-start { width: 180px; margin-bottom: 60px; filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.3)); animation: floatLogo 3s ease-in-out infinite; }
       #start-btn {
-        padding: 18px 50px; 
-        font-size: 16px; font-weight: 700;
-        background-image: linear-gradient(to right, #8E6E26 0%, #F4D03F  51%, #8E6E26  100%);
-        background-size: 200% auto;
-        color: black; 
-        border: 1px solid #F4D03F; border-radius: 50px;
+        padding: 18px 50px; font-size: 16px; font-weight: 700;
+        background-image: linear-gradient(to right, #8E6E26 0%, #F4D03F 51%, #8E6E26 100%);
+        background-size: 200% auto; color: black; border: 1px solid #F4D03F; border-radius: 50px;
         cursor: pointer; text-transform: uppercase; letter-spacing: 3px;
-        box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
-        transition: 0.5s;
-        animation: pulseButton 2s infinite;
-      }
-      #start-btn:active { transform: scale(0.95); }
-
-      /* --- WARSTWA 1: BRANDING (Zawsze widoczna) --- */
-      #branding-layer {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 30; pointer-events: none;
-        display: none;
+        box-shadow: 0 0 20px rgba(212, 175, 55, 0.4); transition: 0.5s; animation: pulseButton 2s infinite;
       }
       
-      /* Logo na górze */
-      .logo-watermark { 
-        position: absolute; top: 30px; left: 50%; transform: translateX(-50%);
-        width: 90px; 
-        filter: drop-shadow(0 2px 4px black); 
-        opacity: 0.9; 
-        pointer-events: auto;
-      }
-
-      /* PRZYCISK LINKU (Podniesiony bezpiecznie) */
+      /* UI BRANDING */
+      #branding-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 30; pointer-events: none; display: none; }
+      .logo-watermark { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); width: 90px; filter: drop-shadow(0 2px 4px black); opacity: 0.9; pointer-events: auto; }
       #website-link {
-        position: absolute; 
-        bottom: 80px; /* Margines od dołu */
-        left: 50%; transform: translateX(-50%);
-        
-        pointer-events: auto; 
-        color: #D4AF37; 
-        text-decoration: none; 
-        background: transparent; 
-        border: 1px solid #D4AF37; 
-        padding: 12px 35px; 
-        border-radius: 30px; 
-        font-size: 11px; 
-        letter-spacing: 2px;
-        font-weight: bold;
-        text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-        box-shadow: 0 0 15px rgba(212, 175, 55, 0.2); 
-        transition: 0.3s;
-        white-space: nowrap;
+        position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+        pointer-events: auto; color: #D4AF37; text-decoration: none; background: transparent;
+        border: 1px solid #D4AF37; padding: 12px 35px; border-radius: 30px; font-size: 11px;
+        letter-spacing: 2px; font-weight: bold; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        box-shadow: 0 0 15px rgba(212, 175, 55, 0.2); transition: 0.3s; white-space: nowrap;
       }
       #website-link:active { background: rgba(212, 175, 55, 0.2); }
 
-      /* --- WARSTWA 2: SKANER (Znikająca) --- */
-      #scanner-layer {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 20; pointer-events: none;
-        display: none;
-        flex-direction: column; align-items: center; justify-content: center;
-        transition: opacity 0.5s ease;
-      }
-
+      /* UI SKANER */
+      #scanner-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; pointer-events: none; display: none; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s ease; }
       .scanner-frame { position: relative; width: 70vw; height: 70vw; }
-      .corner {
-        position: absolute; width: 30px; height: 30px;
-        border-color: #D4AF37; border-style: solid; opacity: 0.9;
-        filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.6));
-      }
+      .corner { position: absolute; width: 30px; height: 30px; border-color: #D4AF37; border-style: solid; opacity: 0.9; filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.6)); }
       .tl { top: 0; left: 0; border-width: 4px 0 0 4px; border-top-left-radius: 15px; }
       .tr { top: 0; right: 0; border-width: 4px 4px 0 0; border-top-right-radius: 15px; }
       .bl { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-bottom-left-radius: 15px; }
       .br { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-bottom-right-radius: 15px; }
-
-      /* Instrukcja */
-      .instruction-container {
-        position: absolute; 
-        bottom: 150px; /* Nad przyciskiem */
-        width: 100%; text-align: center;
-      }
-
-      .instruction-text {
-        color: #D4AF37; background: rgba(0,0,0,0.8);
-        padding: 10px 30px; border-radius: 30px; font-size: 12px; font-weight: bold;
-        text-transform: uppercase; border: 1px solid rgba(212, 175, 55, 0.5);
-        letter-spacing: 2px;
-      }
+      .instruction-container { position: absolute; bottom: 150px; width: 100%; text-align: center; }
+      .instruction-text { color: #D4AF37; background: rgba(0,0,0,0.8); padding: 10px 30px; border-radius: 30px; font-size: 12px; font-weight: bold; text-transform: uppercase; border: 1px solid rgba(212, 175, 55, 0.5); letter-spacing: 2px; }
 
       @keyframes floatLogo { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
       @keyframes pulseButton { 0% { box-shadow: 0 0 20px rgba(212, 175, 55, 0.4); } 50% { box-shadow: 0 0 35px rgba(212, 175, 55, 0.7); } 100% { box-shadow: 0 0 20px rgba(212, 175, 55, 0.4); } }
     </style>
   </head>
   <body>
-
-    <div id="start-screen">
-      <img src="./logo.png" class="logo-start" onerror="this.style.display='none'">
-      <button id="start-btn">Ożyw Wspomnienie</button>
-    </div>
-
-    <div id="branding-layer">
-        <img src="./logo.png" class="logo-watermark" onerror="this.style.display='none'">
-        <a href="https://ivyou.pl" target="_blank" id="website-link">IVYOU.PL</a>
-    </div>
-
+    <div id="start-screen"><img src="./logo.png" class="logo-start" onerror="this.style.display='none'"><button id="start-btn">Ożyw Wspomnienie</button></div>
+    <div id="branding-layer"><img src="./logo.png" class="logo-watermark" onerror="this.style.display='none'"><a href="https://ivyou.pl" target="_blank" id="website-link">IVYOU.PL</a></div>
     <div id="scanner-layer">
-        <div class="scanner-frame">
-            <div class="corner tl"></div><div class="corner tr"></div>
-            <div class="corner bl"></div><div class="corner br"></div>
-        </div>
-        <div class="instruction-container">
-            <div class="instruction-text">Skieruj aparat na zdjęcie</div>
-        </div>
+        <div class="scanner-frame"><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div></div>
+        <div class="instruction-container"><div class="instruction-text">Skieruj aparat na zdjęcie</div></div>
     </div>
-
     <div id="ar-container"></div>
-
     <script>
       const MAX_SLOTS = 20; 
       const params = new URLSearchParams(window.location.search);
       const folderName = params.get('k');
-
       if (!folderName) { alert("BŁĄD: Brak folderu w linku!"); throw new Error("Stop"); }
 
-      // --- NAPRAWA ŚCIEŻKI: Szukamy bezpośrednio obok pliku index.html ---
+      // POPRAWNA ŚCIEŻKA DLA TWOJEJ STRUKTURY
       const basePath = `./${folderName}`;
       const mindPath = `${basePath}/targets.mind`;
 
@@ -211,94 +122,43 @@
 
       function initAR() {
           const container = document.getElementById('ar-container');
-          
-          let html = `
-            <a-scene 
-              mindar-image="imageTargetSrc: ${mindPath}; maxTrack: 1; filterMinCF:0.0001; filterBeta: 0.001; uiLoading:no; uiScanning:no; uiError:no;" 
-              color-space="sRGB" 
-              renderer="colorManagement: true, physicallyCorrectLights; alpha: true;" 
-              vr-mode-ui="enabled: false" 
-              device-orientation-permission-ui="enabled: false">
-              
-              <a-assets>`;
-
+          let html = `<a-scene mindar-image="imageTargetSrc: ${mindPath}; maxTrack: 1; filterMinCF:0.0001; filterBeta: 0.001; uiLoading:no; uiScanning:no; uiError:no;" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights; alpha: true;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"><a-assets>`;
+          for(let i=0; i<MAX_SLOTS; i++) { html += `<video id="vid${i}" src="${basePath}/${i}.mp4" loop="true" playsinline webkit-playsinline crossorigin="anonymous"></video>`; }
+          html += `</a-assets><a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
           for(let i=0; i<MAX_SLOTS; i++) {
-              html += `<video id="vid${i}" src="${basePath}/${i}.mp4" loop="true" playsinline webkit-playsinline crossorigin="anonymous"></video>`;
+              html += `<a-entity mindar-image-target="targetIndex: ${i}" class="target-marker" data-id="${i}"><a-plane id="plane${i}" src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0" material="shader: magic-blend; opacity: 0; transparent: true;"></a-plane></a-entity>`;
           }
-
-          html += `</a-assets>
-                   <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
-
-          for(let i=0; i<MAX_SLOTS; i++) {
-              html += `
-              <a-entity mindar-image-target="targetIndex: ${i}" class="target-marker" data-id="${i}">
-                  <a-plane id="plane${i}" src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0" 
-                    material="shader: magic-blend; opacity: 0; transparent: true;">
-                  </a-plane>
-              </a-entity>`;
-          }
-
           html += `</a-scene>`;
           container.innerHTML = html;
-
-          setTimeout(() => {
-              document.body.style.background = 'transparent'; 
-              const scene = document.querySelector('a-scene');
-              if(scene && scene.renderer) scene.renderer.setClearColor(0, 0); 
-              setupEvents();
-          }, 1500);
+          setTimeout(() => { document.body.style.background = 'transparent'; const scene = document.querySelector('a-scene'); if(scene && scene.renderer) scene.renderer.setClearColor(0, 0); setupEvents(); }, 1500);
       }
 
       function setupEvents() {
           const targets = document.querySelectorAll('.target-marker');
           const scannerLayer = document.getElementById('scanner-layer');
-          
           targets.forEach((target, index) => {
               target.addEventListener('targetFound', () => {
                   const vid = document.getElementById(`vid${index}`);
                   const plane = document.getElementById(`plane${index}`);
                   if(vid) {
-                      vid.play();
-                      vid.muted = false; 
+                      vid.play(); vid.muted = false; 
                       if (navigator.vibrate) navigator.vibrate(200);
                       scannerLayer.style.opacity = '0';
-                      
-                      const SCALE_FACTOR = 1.35; 
-                      plane.setAttribute("width", SCALE_FACTOR);
-                      if(vid.videoWidth > 0) {
-                          const ratio = (vid.videoHeight / vid.videoWidth) * SCALE_FACTOR;
-                          plane.setAttribute("height", ratio);
-                      } else {
-                          vid.addEventListener('loadedmetadata', () => {
-                             const ratio = (vid.videoHeight / vid.videoWidth) * SCALE_FACTOR;
-                             plane.setAttribute("height", ratio);
-                          });
-                      }
+                      const SCALE_FACTOR = 1.35; plane.setAttribute("width", SCALE_FACTOR);
+                      if(vid.videoWidth > 0) { const ratio = (vid.videoHeight / vid.videoWidth) * SCALE_FACTOR; plane.setAttribute("height", ratio); } 
+                      else { vid.addEventListener('loadedmetadata', () => { const ratio = (vid.videoHeight / vid.videoWidth) * SCALE_FACTOR; plane.setAttribute("height", ratio); }); }
                       fadeIn(plane);
                   }
               });
-              
               target.addEventListener('targetLost', () => {
                   const vid = document.getElementById(`vid${index}`);
                   const plane = document.getElementById(`plane${index}`);
-                  if(vid) vid.pause();
-                  if(plane) plane.setAttribute('material', 'opacity', 0);
+                  if(vid) vid.pause(); if(plane) plane.setAttribute('material', 'opacity', 0);
                   scannerLayer.style.opacity = '1';
               });
           });
       }
-
-      function fadeIn(element) {
-          let opacity = 0;
-          const interval = setInterval(() => {
-              if (opacity >= 1) {
-                  clearInterval(interval);
-              } else {
-                  opacity += 0.05; 
-                  element.setAttribute('material', 'opacity', opacity);
-              }
-          }, 30); 
-      }
+      function fadeIn(el) { let op = 0; const i = setInterval(() => { if (op >= 1) clearInterval(i); else { op += 0.05; el.setAttribute('material', 'opacity', op); } }, 30); }
     </script>
   </body>
 </html>
