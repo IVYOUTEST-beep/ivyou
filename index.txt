@@ -9,12 +9,11 @@
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
 
     <script>
-      // --- MAGIA: SHADER WTAPIAJĄCY (Magic Blend) ---
-      // Ten kod sprawia, że krawędzie wideo stają się miękkie i przezroczyste.
+      // SHADER: Magic Blend (Miękkie krawędzie)
       AFRAME.registerShader('magic-blend', {
         schema: {
           src: {type: 'map', is: 'uniform'},
-          opacity: {type: 'number', is: 'uniform', default: 1.0}
+          opacity: {type: 'number', is: 'uniform', default: 0.0}
         },
         vertexShader: `
           varying vec2 vUV;
@@ -29,12 +28,9 @@
           varying vec2 vUV;
           void main() {
             vec4 color = texture2D(src, vUV);
-            // Obliczanie miękkości krawędzi (0.15 = szerokie, miękkie przejście)
             float edgeWidth = 0.15; 
             float alphaX = smoothstep(0.0, edgeWidth, vUV.x) * smoothstep(1.0, 1.0 - edgeWidth, vUV.x);
             float alphaY = smoothstep(0.0, edgeWidth, vUV.y) * smoothstep(1.0, 1.0 - edgeWidth, vUV.y);
-            
-            // Mnożymy oryginalną przezroczystość przez naszą maskę krawędzi
             gl_FragColor = vec4(color.rgb, color.a * opacity * alphaX * alphaY);
           }
         `
@@ -49,7 +45,6 @@
         overflow: hidden; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
 
-      /* Kamera AR - Overscan */
       video {
         position: absolute !important;
         top: 50% !important; left: 50% !important;
@@ -67,7 +62,7 @@
       
       .a-enter-vr-button { display: none; }
 
-      /* --- EKRAN STARTOWY (PREMIUM) --- */
+      /* --- EKRAN STARTOWY --- */
       #start-screen {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 99999;
@@ -81,7 +76,6 @@
         animation: floatLogo 3s ease-in-out infinite;
       }
 
-      /* Złoty Przycisk */
       #start-btn {
         padding: 18px 50px; 
         font-size: 16px; font-weight: 700;
@@ -96,17 +90,53 @@
       }
       #start-btn:active { transform: scale(0.95); }
 
-      /* --- UI SKANERA --- */
-      #ui-layer {
+      /* --- WARSTWA 1: BRANDING (Zawsze widoczna) --- */
+      #branding-layer {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 10; pointer-events: none;
+        z-index: 30; pointer-events: none;
         display: none;
-        flex-direction: column; align-items: center; justify-content: space-between;
-        padding: 40px 0;
-        transition: opacity 0.5s ease;
+      }
+      
+      /* Logo na górze */
+      .logo-watermark { 
+        position: absolute; top: 30px; left: 50%; transform: translateX(-50%);
+        width: 90px; 
+        filter: drop-shadow(0 2px 4px black); 
+        opacity: 0.9; 
+        pointer-events: auto;
       }
 
-      .logo-top { width: 90px; filter: drop-shadow(0 2px 4px black); opacity: 0.9; margin-top: 10px; }
+      /* PRZYCISK LINKU (Podniesiony bezpiecznie) */
+      #website-link {
+        position: absolute; 
+        bottom: 80px; /* Margines od dołu */
+        left: 50%; transform: translateX(-50%);
+        
+        pointer-events: auto; 
+        color: #D4AF37; 
+        text-decoration: none; 
+        background: transparent; 
+        border: 1px solid #D4AF37; 
+        padding: 12px 35px; 
+        border-radius: 30px; 
+        font-size: 11px; 
+        letter-spacing: 2px;
+        font-weight: bold;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        box-shadow: 0 0 15px rgba(212, 175, 55, 0.2); 
+        transition: 0.3s;
+        white-space: nowrap;
+      }
+      #website-link:active { background: rgba(212, 175, 55, 0.2); }
+
+      /* --- WARSTWA 2: SKANER (Znikająca) --- */
+      #scanner-layer {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 20; pointer-events: none;
+        display: none;
+        flex-direction: column; align-items: center; justify-content: center;
+        transition: opacity 0.5s ease;
+      }
 
       .scanner-frame { position: relative; width: 70vw; height: 70vw; }
       .corner {
@@ -119,22 +149,18 @@
       .bl { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-bottom-left-radius: 15px; }
       .br { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-bottom-right-radius: 15px; }
 
+      /* Instrukcja */
       .instruction-container {
-        text-align: center; margin-bottom: 30px;
-        display: flex; flex-direction: column; gap: 15px; align-items: center;
+        position: absolute; 
+        bottom: 150px; /* Nad przyciskiem */
+        width: 100%; text-align: center;
       }
 
       .instruction-text {
         color: #D4AF37; background: rgba(0,0,0,0.8);
-        padding: 12px 35px; border-radius: 30px; font-size: 12px; font-weight: bold;
+        padding: 10px 30px; border-radius: 30px; font-size: 12px; font-weight: bold;
         text-transform: uppercase; border: 1px solid rgba(212, 175, 55, 0.5);
         letter-spacing: 2px;
-      }
-
-      #website-link {
-        pointer-events: auto; color: #D4AF37; text-decoration: none; 
-        border: 1px solid #D4AF37; padding: 10px 25px; border-radius: 25px; 
-        font-size: 10px; background: rgba(0,0,0,0.9); letter-spacing: 1px;
       }
 
       @keyframes floatLogo { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
@@ -148,15 +174,18 @@
       <button id="start-btn">Ożyw Wspomnienie</button>
     </div>
 
-    <div id="ui-layer">
-        <img src="./logo.png" class="logo-top" onerror="this.style.display='none'">
+    <div id="branding-layer">
+        <img src="./logo.png" class="logo-watermark" onerror="this.style.display='none'">
+        <a href="https://ivyou.pl" target="_blank" id="website-link">IVYOU.PL</a>
+    </div>
+
+    <div id="scanner-layer">
         <div class="scanner-frame">
             <div class="corner tl"></div><div class="corner tr"></div>
             <div class="corner bl"></div><div class="corner br"></div>
         </div>
         <div class="instruction-container">
             <div class="instruction-text">Skieruj aparat na zdjęcie</div>
-            <a href="https://ivyou.pl" target="_blank" id="website-link">IVYOU.PL</a>
         </div>
     </div>
 
@@ -169,12 +198,14 @@
 
       if (!folderName) { alert("BŁĄD: Brak folderu w linku!"); throw new Error("Stop"); }
 
-      const basePath = `./ivyou/${folderName}`;
+      // --- NAPRAWA ŚCIEŻKI: Szukamy bezpośrednio obok pliku index.html ---
+      const basePath = `./${folderName}`;
       const mindPath = `${basePath}/targets.mind`;
 
       document.getElementById('start-btn').addEventListener('click', () => {
           document.getElementById('start-screen').style.display = 'none';
-          document.getElementById('ui-layer').style.display = 'flex';
+          document.getElementById('branding-layer').style.display = 'block'; 
+          document.getElementById('scanner-layer').style.display = 'flex';
           initAR();
       });
 
@@ -199,11 +230,10 @@
                    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
 
           for(let i=0; i<MAX_SLOTS; i++) {
-              // UŻYWAMY NOWEGO SHADERA: magic-blend
               html += `
               <a-entity mindar-image-target="targetIndex: ${i}" class="target-marker" data-id="${i}">
                   <a-plane id="plane${i}" src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0" 
-                    material="shader: magic-blend; opacity: 1; transparent: true;">
+                    material="shader: magic-blend; opacity: 0; transparent: true;">
                   </a-plane>
               </a-entity>`;
           }
@@ -221,7 +251,7 @@
 
       function setupEvents() {
           const targets = document.querySelectorAll('.target-marker');
-          const uiLayer = document.getElementById('ui-layer');
+          const scannerLayer = document.getElementById('scanner-layer');
           
           targets.forEach((target, index) => {
               target.addEventListener('targetFound', () => {
@@ -230,13 +260,11 @@
                   if(vid) {
                       vid.play();
                       vid.muted = false; 
-
-                      uiLayer.style.opacity = '0';
+                      if (navigator.vibrate) navigator.vibrate(200);
+                      scannerLayer.style.opacity = '0';
                       
-                      // POWIĘKSZENIE 1.35x + MAGIC BLEND = WOW!
                       const SCALE_FACTOR = 1.35; 
                       plane.setAttribute("width", SCALE_FACTOR);
-
                       if(vid.videoWidth > 0) {
                           const ratio = (vid.videoHeight / vid.videoWidth) * SCALE_FACTOR;
                           plane.setAttribute("height", ratio);
@@ -246,18 +274,31 @@
                              plane.setAttribute("height", ratio);
                           });
                       }
+                      fadeIn(plane);
                   }
               });
               
               target.addEventListener('targetLost', () => {
                   const vid = document.getElementById(`vid${index}`);
+                  const plane = document.getElementById(`plane${index}`);
                   if(vid) vid.pause();
-                  uiLayer.style.opacity = '1';
+                  if(plane) plane.setAttribute('material', 'opacity', 0);
+                  scannerLayer.style.opacity = '1';
               });
           });
+      }
+
+      function fadeIn(element) {
+          let opacity = 0;
+          const interval = setInterval(() => {
+              if (opacity >= 1) {
+                  clearInterval(interval);
+              } else {
+                  opacity += 0.05; 
+                  element.setAttribute('material', 'opacity', opacity);
+              }
+          }, 30); 
       }
     </script>
   </body>
 </html>
-
-
