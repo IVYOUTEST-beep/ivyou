@@ -1,215 +1,262 @@
 <!DOCTYPE html>
-<html>
+<html lang="pl">
   <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>IVYOU AR</title>
 
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+
+    <script>
+      // --- MAGIA: SHADER WTAPIAJĄCY (Magic Blend) ---
+      // Ten kod sprawia, że krawędzie wideo stają się miękkie i przezroczyste.
+      AFRAME.registerShader('magic-blend', {
+        schema: {
+          src: {type: 'map', is: 'uniform'},
+          opacity: {type: 'number', is: 'uniform', default: 1.0}
+        },
+        vertexShader: `
+          varying vec2 vUV;
+          void main() {
+            vUV = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D src;
+          uniform float opacity;
+          varying vec2 vUV;
+          void main() {
+            vec4 color = texture2D(src, vUV);
+            // Obliczanie miękkości krawędzi (0.15 = szerokie, miękkie przejście)
+            float edgeWidth = 0.15; 
+            float alphaX = smoothstep(0.0, edgeWidth, vUV.x) * smoothstep(1.0, 1.0 - edgeWidth, vUV.x);
+            float alphaY = smoothstep(0.0, edgeWidth, vUV.y) * smoothstep(1.0, 1.0 - edgeWidth, vUV.y);
+            
+            // Mnożymy oryginalną przezroczystość przez naszą maskę krawędzi
+            gl_FragColor = vec4(color.rgb, color.a * opacity * alphaX * alphaY);
+          }
+        `
+      });
+    </script>
+
     <style>
-      body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: black; }
-      
-      /* --- EKRAN ŁADOWANIA --- */
-      #loader-screen {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: black; z-index: 99999;
-        display: flex; flex-direction: column; justify-content: center; align-items: center;
-        transition: opacity 0.5s;
-      }
-      .pulsing-logo { width: 100px; animation: breathe 2s infinite; }
-      @keyframes breathe { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } 100% { transform: scale(1); opacity: 1; } }
-      #loader-text { margin-top: 20px; color: #D4AF37; font-weight: bold; letter-spacing: 2px; }
-
-      /* --- CZYSTY UI (Bez zasłaniania kamery) --- */
-      #ui-layer { 
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-        z-index: 9999; pointer-events: none; 
-        display: flex; flex-direction: column; align-items: center; 
+      /* --- FUNDAMENTY --- */
+      html, body {
+        margin: 0; padding: 0; width: 100%; height: 100%;
+        background-color: black !important;
+        overflow: hidden; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       }
 
-      /* RAMKA - TERAZ CAŁKOWICIE PRZEZROCZYSTA W ŚRODKU */
-      .scan-frame {
-        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        width: 70vw; height: 70vw;
-        border: 2px solid rgba(212, 175, 55, 0.8); /* Tylko złota linia */
-        border-radius: 20px;
-        /* ZERO cienia, ZERO tła - kamera będzie widoczna w 100% */
+      /* Kamera AR - Overscan */
+      video {
+        position: absolute !important;
+        top: 50% !important; left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        min-width: 102vw !important; min-height: 102vh !important;
+        width: auto !important; height: auto !important;
+        object-fit: cover !important;
+        z-index: -2 !important; display: block !important;
+      }
+
+      #ar-container {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 1; background: transparent !important;
       }
       
-      /* Ozdobne rogi (opcjonalne, dla stylu) */
-      .scan-frame::before { content: ''; position: absolute; top: -5px; left: -5px; width: 20px; height: 20px; border-top: 5px solid #D4AF37; border-left: 5px solid #D4AF37; border-top-left-radius: 20px; }
-      .scan-frame::after { content: ''; position: absolute; bottom: -5px; right: -5px; width: 20px; height: 20px; border-bottom: 5px solid #D4AF37; border-right: 5px solid #D4AF37; border-bottom-right-radius: 20px; }
-
-      .logo-img { margin-top: 40px; height: 60px; filter: drop-shadow(0 2px 4px black); }
-      .instruction { 
-        position: absolute; bottom: 15%; 
-        color: #D4AF37; font-size: 14px; font-weight: bold; letter-spacing: 1px;
-        text-shadow: 1px 1px 2px black; text-align: center; width: 100%;
-      }
-
-      /* PRZYCISKI */
-      #unmuteButton {
-        position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 10001;
-        background: #D4AF37; color: black; border: none; padding: 12px 30px; 
-        border-radius: 30px; font-weight: bold; cursor: pointer; display: none; pointer-events: auto;
-      }
-      #websiteButton {
-        position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); z-index: 10002;
-        color: #D4AF37; text-decoration: none; border: 1px solid #D4AF37; 
-        padding: 10px 25px; border-radius: 30px; font-size: 12px; pointer-events: auto; background: rgba(0,0,0,0.5);
-      }
-      
-      /* Ukrywamy wideo systemowe (to poza AR) */
-      #vid-hidden { position: absolute; top: -10000px; }
       .a-enter-vr-button { display: none; }
+
+      /* --- EKRAN STARTOWY (PREMIUM) --- */
+      #start-screen {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 99999;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
+      }
+      
+      .logo-start { 
+        width: 180px; margin-bottom: 60px; 
+        filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.3));
+        animation: floatLogo 3s ease-in-out infinite;
+      }
+
+      /* Złoty Przycisk */
+      #start-btn {
+        padding: 18px 50px; 
+        font-size: 16px; font-weight: 700;
+        background-image: linear-gradient(to right, #8E6E26 0%, #F4D03F  51%, #8E6E26  100%);
+        background-size: 200% auto;
+        color: black; 
+        border: 1px solid #F4D03F; border-radius: 50px;
+        cursor: pointer; text-transform: uppercase; letter-spacing: 3px;
+        box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+        transition: 0.5s;
+        animation: pulseButton 2s infinite;
+      }
+      #start-btn:active { transform: scale(0.95); }
+
+      /* --- UI SKANERA --- */
+      #ui-layer {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 10; pointer-events: none;
+        display: none;
+        flex-direction: column; align-items: center; justify-content: space-between;
+        padding: 40px 0;
+        transition: opacity 0.5s ease;
+      }
+
+      .logo-top { width: 90px; filter: drop-shadow(0 2px 4px black); opacity: 0.9; margin-top: 10px; }
+
+      .scanner-frame { position: relative; width: 70vw; height: 70vw; }
+      .corner {
+        position: absolute; width: 30px; height: 30px;
+        border-color: #D4AF37; border-style: solid; opacity: 0.9;
+        filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.6));
+      }
+      .tl { top: 0; left: 0; border-width: 4px 0 0 4px; border-top-left-radius: 15px; }
+      .tr { top: 0; right: 0; border-width: 4px 4px 0 0; border-top-right-radius: 15px; }
+      .bl { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-bottom-left-radius: 15px; }
+      .br { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-bottom-right-radius: 15px; }
+
+      .instruction-container {
+        text-align: center; margin-bottom: 30px;
+        display: flex; flex-direction: column; gap: 15px; align-items: center;
+      }
+
+      .instruction-text {
+        color: #D4AF37; background: rgba(0,0,0,0.8);
+        padding: 12px 35px; border-radius: 30px; font-size: 12px; font-weight: bold;
+        text-transform: uppercase; border: 1px solid rgba(212, 175, 55, 0.5);
+        letter-spacing: 2px;
+      }
+
+      #website-link {
+        pointer-events: auto; color: #D4AF37; text-decoration: none; 
+        border: 1px solid #D4AF37; padding: 10px 25px; border-radius: 25px; 
+        font-size: 10px; background: rgba(0,0,0,0.9); letter-spacing: 1px;
+      }
+
+      @keyframes floatLogo { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
+      @keyframes pulseButton { 0% { box-shadow: 0 0 20px rgba(212, 175, 55, 0.4); } 50% { box-shadow: 0 0 35px rgba(212, 175, 55, 0.7); } 100% { box-shadow: 0 0 20px rgba(212, 175, 55, 0.4); } }
     </style>
   </head>
   <body>
 
-    <div id="loader-screen">
-        <img src="./logo.png" class="pulsing-logo" onerror="this.style.display='none';">
-        <div id="loader-text">ŁADOWANIE...</div>
+    <div id="start-screen">
+      <img src="./logo.png" class="logo-start" onerror="this.style.display='none'">
+      <button id="start-btn">Ożyw Wspomnienie</button>
     </div>
 
-    <div id="ui-layer" style="display:none;">
-      <img src="./logo.png" class="logo-img" onerror="this.style.display='none';">
-      <div id="scan-guide" class="scan-frame"></div>
-      <div id="scan-text" class="instruction">SKIERUJ KAMERĘ NA ZDJĘCIE</div>
+    <div id="ui-layer">
+        <img src="./logo.png" class="logo-top" onerror="this.style.display='none'">
+        <div class="scanner-frame">
+            <div class="corner tl"></div><div class="corner tr"></div>
+            <div class="corner bl"></div><div class="corner br"></div>
+        </div>
+        <div class="instruction-container">
+            <div class="instruction-text">Skieruj aparat na zdjęcie</div>
+            <a href="https://ivyou.pl" target="_blank" id="website-link">IVYOU.PL</a>
+        </div>
     </div>
-
-    <button id="unmuteButton">🔊 WŁĄCZ DŹWIĘK</button>
-    <a href="https://ivyou.pl" target="_blank" id="websiteButton" style="display:none;">IVYOU.PL</a>
 
     <div id="ar-container"></div>
 
     <script>
-      // === KONFIGURACJA ===
       const MAX_SLOTS = 20; 
-      const urlParams = new URLSearchParams(window.location.search);
-      const klientID = urlParams.get('k');
+      const params = new URLSearchParams(window.location.search);
+      const folderName = params.get('k');
 
-      if (!klientID) {
-          alert("BŁĄD: Brak folderu w linku (?k=...)");
-          throw new Error("Brak ID");
-      }
+      if (!folderName) { alert("BŁĄD: Brak folderu w linku!"); throw new Error("Stop"); }
 
-      const folder = `./ivyou/${klientID}`;
-      const mindFile = `${folder}/targets.mind`;
+      const basePath = `./ivyou/${folderName}`;
+      const mindPath = `${basePath}/targets.mind`;
 
-      function startApp() {
-          console.log("Uruchamianie dla: " + folder);
+      document.getElementById('start-btn').addEventListener('click', () => {
+          document.getElementById('start-screen').style.display = 'none';
+          document.getElementById('ui-layer').style.display = 'flex';
+          initAR();
+      });
 
-          // BUDOWANIE SCENY
-          // WAŻNE: Dodano 'targetIndex' i pętlę generującą
-          let html = `<a-scene mindar-image="imageTargetSrc: ${mindFile}; maxTrack: 1; filterMinCF:0.0001; filterBeta: 0.001" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">`;
+      function initAR() {
+          const container = document.getElementById('ar-container');
           
-          html += `<a-assets>`;
-          for(let i=0; i < MAX_SLOTS; i++) {
-              // playsinline jest kluczowe dla iPhone'ów
-              html += `<video id="vid${i}" src="${folder}/${i}.mp4" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted autoplay></video>`;
+          let html = `
+            <a-scene 
+              mindar-image="imageTargetSrc: ${mindPath}; maxTrack: 1; filterMinCF:0.0001; filterBeta: 0.001; uiLoading:no; uiScanning:no; uiError:no;" 
+              color-space="sRGB" 
+              renderer="colorManagement: true, physicallyCorrectLights; alpha: true;" 
+              vr-mode-ui="enabled: false" 
+              device-orientation-permission-ui="enabled: false">
+              
+              <a-assets>`;
+
+          for(let i=0; i<MAX_SLOTS; i++) {
+              html += `<video id="vid${i}" src="${basePath}/${i}.mp4" loop="true" playsinline webkit-playsinline crossorigin="anonymous"></video>`;
           }
-          html += `</a-assets>`;
-          
-          html += `<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
 
-          for(let i=0; i < MAX_SLOTS; i++) {
-              // --- NAJWAŻNIEJSZA ZMIANA ---
-              // material="shader: flat" -> To naprawia "czarne wideo" (niewidzialne).
-              // width="1" height="1" -> Domyślny rozmiar (zabezpieczenie).
+          html += `</a-assets>
+                   <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>`;
+
+          for(let i=0; i<MAX_SLOTS; i++) {
+              // UŻYWAMY NOWEGO SHADERA: magic-blend
               html += `
-              <a-entity mindar-image-target="targetIndex: ${i}" class="target-entity" data-id="${i}">
-                  <a-plane id="plane${i}" src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0" material="shader: flat; opacity: 1;"></a-plane>
+              <a-entity mindar-image-target="targetIndex: ${i}" class="target-marker" data-id="${i}">
+                  <a-plane id="plane${i}" src="#vid${i}" position="0 0 0" height="1" width="1" rotation="0 0 0" 
+                    material="shader: magic-blend; opacity: 1; transparent: true;">
+                  </a-plane>
               </a-entity>`;
           }
+
           html += `</a-scene>`;
+          container.innerHTML = html;
 
-          document.getElementById('ar-container').innerHTML = html;
-
-          // SKALOWANIE WIDEO (Auto-Fit)
-          for(let i=0; i < MAX_SLOTS; i++) {
-              const videoEl = document.getElementById(`vid${i}`);
-              const planeEl = document.getElementById(`plane${i}`);
-              
-              if(videoEl) {
-                  videoEl.addEventListener('loadedmetadata', () => {
-                      // Jeśli wideo ma wymiary, dopasuj AR
-                      if(videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
-                          const ratio = videoEl.videoHeight / videoEl.videoWidth;
-                          planeEl.setAttribute("height", ratio);
-                          planeEl.setAttribute("width", 1);
-                      }
-                  });
-              }
-          }
-
-          // UKRYJ LOADER PO 3 SEKUNDACH
           setTimeout(() => {
-              document.getElementById('loader-screen').style.opacity = '0';
-              setTimeout(() => {
-                  document.getElementById('loader-screen').style.display = 'none';
-                  document.getElementById('ui-layer').style.display = 'flex';
-                  document.getElementById('websiteButton').style.display = 'flex';
-              }, 500);
-              initEvents();
-          }, 2500);
+              document.body.style.background = 'transparent'; 
+              const scene = document.querySelector('a-scene');
+              if(scene && scene.renderer) scene.renderer.setClearColor(0, 0); 
+              setupEvents();
+          }, 1500);
       }
 
-      function initEvents() {
-          const unmuteBtn = document.querySelector("#unmuteButton");
-          const scanGuide = document.querySelector("#scan-guide");
-          const scanText = document.querySelector("#scan-text");
-          const targets = document.querySelectorAll('.target-entity');
+      function setupEvents() {
+          const targets = document.querySelectorAll('.target-marker');
+          const uiLayer = document.getElementById('ui-layer');
+          
+          targets.forEach((target, index) => {
+              target.addEventListener('targetFound', () => {
+                  const vid = document.getElementById(`vid${index}`);
+                  const plane = document.getElementById(`plane${index}`);
+                  if(vid) {
+                      vid.play();
+                      vid.muted = false; 
 
-          targets.forEach(target => {
-              target.addEventListener("targetFound", event => {
-                  console.log("Wykryto cel!");
-                  const id = target.getAttribute('data-id');
-                  const video = document.querySelector(`#vid${id}`);
-                  const plane = document.querySelector(`#plane${id}`);
-
-                  if(video) {
-                      video.play();
-                      // Upewniamy się, że wideo jest głośne
-                      // (Użytkownik musi kliknąć przycisk, żeby odblokować dźwięk w przeglądarce)
+                      uiLayer.style.opacity = '0';
                       
-                      // Dopasowanie awaryjne (jeśli loadedmetadata nie zadziałało wcześniej)
-                      if(plane && video.videoWidth > 0) {
-                          const ratio = video.videoHeight / video.videoWidth;
-                          plane.setAttribute("height", ratio);
-                      }
+                      // POWIĘKSZENIE 1.35x + MAGIC BLEND = WOW!
+                      const SCALE_FACTOR = 1.35; 
+                      plane.setAttribute("width", SCALE_FACTOR);
 
-                      unmuteBtn.style.display = "block";
-                      scanGuide.style.display = "none";
-                      scanText.style.display = "none";
+                      if(vid.videoWidth > 0) {
+                          const ratio = (vid.videoHeight / vid.videoWidth) * SCALE_FACTOR;
+                          plane.setAttribute("height", ratio);
+                      } else {
+                          vid.addEventListener('loadedmetadata', () => {
+                             const ratio = (vid.videoHeight / vid.videoWidth) * SCALE_FACTOR;
+                             plane.setAttribute("height", ratio);
+                          });
+                      }
                   }
               });
-
-              target.addEventListener("targetLost", event => {
-                  console.log("Zgubiono cel");
-                  const id = target.getAttribute('data-id');
-                  const video = document.querySelector(`#vid${id}`);
-                  if(video) video.pause();
-
-                  unmuteBtn.style.display = "none";
-                  scanGuide.style.display = "block";
-                  scanText.style.display = "block";
+              
+              target.addEventListener('targetLost', () => {
+                  const vid = document.getElementById(`vid${index}`);
+                  if(vid) vid.pause();
+                  uiLayer.style.opacity = '1';
               });
-          });
-
-          // OBSŁUGA DŹWIĘKU
-          unmuteBtn.addEventListener("click", () => {
-              document.querySelectorAll('video').forEach(v => {
-                  v.muted = false;
-                  v.volume = 1.0;
-              });
-              unmuteBtn.innerText = "SŁUCHASZ IVYOU";
-              unmuteBtn.style.background = "#2ecc71"; // Zielony
-              setTimeout(() => { unmuteBtn.style.display = "none"; }, 2000);
           });
       }
-
-      // START
-      startApp();
     </script>
   </body>
 </html>
+
