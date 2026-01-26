@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IVYOU | Ożywiamy Wspomnienia</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Montserrat:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- STYLIZACJA (DESIGN) --- */
+        :root {
+            --gold: #D4AF37;
+            --gold-gradient: linear-gradient(90deg, #8E6E26 0%, #F4D03F 50%, #8E6E26 100%);
+            --black: #050505;
+            --dark-gray: #1a1a1a;
+            --white: #ffffff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background-color: var(--black);
+            color: var(--white);
+            font-family: 'Montserrat', sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* TYPOGRAFIA */
+        h1, h2, h3 { font-family: 'Playfair Display', serif; color: var(--gold); }
+        h1 { font-size: 3.5rem; line-height: 1.2; margin-bottom: 20px; }
+        h2 { font-size: 2.5rem; text-align: center; margin-bottom: 50px; }
+        p { line-height: 1.6; color: #ccc; }
+
+        /* NAWIGACJA (MENU) */
+        nav {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 5%;
+            position: fixed; width: 100%; top: 0; z-index: 1000;
+            background: rgba(5, 5, 5, 0.95);
+            border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+        }
+        .logo { height: 50px; } /* Tu będzie Twoje logo */
+        .nav-links a {
+            color: var(--white); text-decoration: none; margin-left: 30px;
+            font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;
+            transition: color 0.3s;
+        }
+        .nav-links a:hover { color: var(--gold); }
+        .nav-btn {
+            border: 1px solid var(--gold); padding: 10px 25px; border-radius: 30px;
+            color: var(--gold) !important;
+        }
+
+        /* SEKCJA GŁÓWNA (HERO) */
+        header {
+            height: 100vh;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; padding: 0 20px;
+            background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
+        }
+        .hero-btn {
+            margin-top: 40px; padding: 18px 50px; font-size: 16px; font-weight: bold;
+            background-image: var(--gold-gradient); background-size: 200%;
+            color: black; border: none; border-radius: 50px; cursor: pointer;
+            text-transform: uppercase; letter-spacing: 2px;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+            transition: 0.5s; text-decoration: none; display: inline-block;
+        }
+        .hero-btn:hover { background-position: right center; transform: scale(1.05); }
+
+        /* JAK TO DZIAŁA */
+        .section { padding: 100px 10%; }
+        .steps { display: flex; justify-content: space-between; gap: 30px; flex-wrap: wrap; }
+        .step-card {
+            flex: 1; min-width: 250px; text-align: center;
+            padding: 40px 20px; background: var(--dark-gray); border-radius: 10px;
+            border: 1px solid rgba(212, 175, 55, 0.1);
+            transition: transform 0.3s;
+        }
+        .step-card:hover { transform: translateY(-10px); border-color: var(--gold); }
+        .step-num { font-size: 4rem; color: rgba(255,255,255,0.05); font-weight: bold; margin-bottom: -30px; }
+        .step-title { font-size: 1.5rem; margin-bottom: 15px; color: var(--gold); }
+
+        /* OFERTA */
+        .offer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px; }
+        .product {
+            background: #111; border-radius: 15px; overflow: hidden;
+            border: 1px solid #333; position: relative;
+        }
+        .product-img { width: 100%; height: 250px; background: #222; display: flex; align-items: center; justify-content: center; color: #555; }
+        .product-info { padding: 30px; }
+        .price { font-size: 1.2rem; color: var(--white); font-weight: bold; margin-top: 10px; display: block;}
+
+        /* STOPKA */
+        footer {
+            text-align: center; padding: 50px; border-top: 1px solid #222; color: #555; font-size: 0.8rem;
+        }
+
+        /* MOBILE */
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+            nav { flex-direction: column; gap: 15px; }
+            .nav-links { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; }
+            .nav-links a { margin: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <img src="logo.png" alt="IVYOU Logo" class="logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+        <h3 style="display:none; color:var(--gold); margin:0;">IVYOU</h3> 
+        
+        <div class="nav-links">
+            <a href="#jak-to-dziala">Jak to działa</a>
+            <a href="#oferta">Oferta</a>
+            <a href="mailto:kontakt@ivyou.pl" class="nav-btn">Zamów</a>
+        </div>
+    </nav>
+
+    <header>
+        <h1>Magia ukryta<br>w obrazie.</h1>
+        <p>Łączymy druk tradycyjny z technologią cyfrową.<br>Bez aplikacji. Wystarczy zbliżyć telefon.</p>
+        <a href="#oferta" class="hero-btn">Zobacz Produkty</a>
+    </header>
+
+    <section id="jak-to-dziala" class="section">
+        <h2>Jak to działa?</h2>
+        <div class="steps">
+            <div class="step-card">
+                <div class="step-num">01</div>
+                <div class="step-title">Prześlij</div>
+                <p>Wysyłasz nam zdjęcie i wideo, które chcesz w nim ukryć.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">02</div>
+                <div class="step-title">Produkcja</div>
+                <p>Tworzymy wydruk Premium z chipem NFC i kodowaniem AR.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">03</div>
+                <div class="step-title">Magia</div>
+                <p>Otrzymujesz produkt. Zbliżasz telefon i zdjęcie ożywa.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="oferta" class="section">
+        <h2>Nasza Oferta</h2>
+        <div class="offer-grid">
+            <div class="product">
+                <div class="product-img">MIEJSCE NA ZDJĘCIE</div>
+                <div class="product-info">
+                    <h3>IVYOU Classic</h3>
+                    <p>Ożywione zdjęcie w formacie A5 lub A4. Idealne na prezent ślubny lub pamiątkę.</p>
+                    <span class="price">od 99 PLN</span>
+                </div>
+            </div>
+
+            <div class="product">
+                <div class="product-img">MIEJSCE NA ZDJĘCIE</div>
+                <div class="product-info">
+                    <h3>IVYOU Business</h3>
+                    <p>Interaktywne wizytówki z wideo-przedstawieniem. Zrób wrażenie na kliencie.</p>
+                    <span class="price">Pakiet 50 szt. / Wycena</span>
+                </div>
+            </div>
+
+            <div class="product">
+                <div class="product-img">MIEJSCE NA ZDJĘCIE</div>
+                <div class="product-info">
+                    <h3>IVYOU Menu</h3>
+                    <p>Karty menu dla restauracji. Pokaż gościom, jak parują Twoje dania.</p>
+                    <span class="price">Wycena indywidualna</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2024 IVYOU. All rights reserved. Technology powered by WebAR.</p>
+        <p>Kontakt: kontakt@ivyou.pl</p>
+    </footer>
+
+</body>
+</html>
