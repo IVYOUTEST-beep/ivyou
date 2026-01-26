@@ -144,7 +144,7 @@
                       vid.play(); vid.muted = false; 
                       if (navigator.vibrate) navigator.vibrate(200);
                       scannerLayer.style.opacity = '0';
-                      const SCALE_FACTOR = 1.35; plane.setAttribute("width", SCALE_FACTOR);
+                      const SCALE_FACTOR = 2.5; plane.setAttribute("width", SCALE_FACTOR);
                       if(vid.videoWidth > 0) { const ratio = (vid.videoHeight / vid.videoWidth) * SCALE_FACTOR; plane.setAttribute("height", ratio); } 
                       else { vid.addEventListener('loadedmetadata', () => { const ratio = (vid.videoHeight / vid.videoWidth) * SCALE_FACTOR; plane.setAttribute("height", ratio); }); }
                       fadeIn(plane);
