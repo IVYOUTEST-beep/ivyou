@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IVYOU | Silnik V10 (Strict)</title>
+    <title>IVYOU | Silnik V11 (Hybrid)</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: monospace; }
         
+        /* KAMERA ZAWSZE NA WIERZCHU (póki canvas jest pusty) */
         #videoInput {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
-            z-index: 1; 
+            z-index: 1; display: block; opacity: 1;
         }
 
         #canvasOutput {
@@ -19,8 +20,8 @@
         
         #console {
             position: absolute; top: 10px; left: 10px; right: 10px;
-            color: #fff; background: rgba(0, 0, 0, 0.6);
-            padding: 10px; border: 1px solid #fff; border-radius: 8px;
+            color: #0f0; background: rgba(0, 0, 0, 0.8);
+            padding: 10px; border: 1px solid #0f0; border-radius: 8px;
             font-size: 12px; font-weight: bold; z-index: 100;
             white-space: pre-wrap;
         }
@@ -28,7 +29,7 @@
 </head>
 <body>
 
-    <div id="console">Start V10 (Rygorystyczny)...</div>
+    <div id="console">Start V11...</div>
     
     <video id="videoInput" playsinline webkit-playsinline autoplay muted></video>
     <img id="refImage" src="marker.jpg" style="display:none;" crossorigin="anonymous">
@@ -40,55 +41,83 @@
         let ctx = canvas.getContext('2d');
         let consoleDiv = document.getElementById('console');
         let openCvReady = false;
+        let cameraReady = false;
 
-        function log(msg) {
+        function log(msg, color = "#fff") {
             consoleDiv.innerText = msg;
+            consoleDiv.style.color = color;
             console.log(msg);
         }
 
-        var Module = {
-            onRuntimeInitialized: function() {
-                openCvReady = true;
-                log("1. Silnik OK. Kamera start...");
-                startCamera();
-            }
-        };
-    </script>
-
-    <script async src="https://docs.opencv.org/4.5.0/opencv.js" type="text/javascript"></script>
-
-    <script>
+        // 1. START KAMERY (OD RAZU!)
         function startCamera() {
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
-                .then(stream => {
+            log("1. Proszę o dostęp do kamery...");
+            const constraints = { 
+                video: { facingMode: 'environment' }, 
+                audio: false 
+            };
+
+            navigator.mediaDevices.getUserMedia(constraints)
+                .then(function(stream) {
                     video.srcObject = stream;
                     video.play();
                     checkVideoSize();
                 })
-                .catch(err => {
-                    navigator.mediaDevices.getUserMedia({ video: true }).then(s => {
+                .catch(function(err) {
+                    log("Błąd tylnej kamery. Próbuję przednią...", "orange");
+                    navigator.mediaDevices.getUserMedia({ video: true }).then((s) => {
                         video.srcObject = s; video.play(); checkVideoSize();
-                    });
+                    }).catch((e) => log("KAMERA ERROR: " + e.message, "red"));
                 });
         }
 
         function checkVideoSize() {
-            if (video.videoWidth > 0) {
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                // Fix wymiarów (z wersji V8)
                 video.width = video.videoWidth;
                 video.height = video.videoHeight;
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                log("2. Kamera OK. Start analizy...");
-                setTimeout(startAR, 500);
+                
+                cameraReady = true;
+                log("2. Kamera OK (" + video.width + "x" + video.height + ").\nCzekam na silnik...");
+                tryStartEngine();
             } else {
                 setTimeout(checkVideoSize, 100);
             }
         }
 
+        // 2. KONFIGURACJA OPENCV
+        var Module = {
+            onRuntimeInitialized: function() {
+                openCvReady = true;
+                tryStartEngine();
+            }
+        };
+
+        function tryStartEngine() {
+            if (cameraReady && openCvReady) {
+                log("3. WSZYSTKO GOTOWE. Start V10 Logic...", "cyan");
+                setTimeout(startAR, 500);
+            } else if (!openCvReady) {
+                log("Kamera działa. Ładowanie mózgu OpenCV...");
+            }
+        }
+
+        // Startujemy kamerę natychmiast po załadowaniu skryptu
+        startCamera();
+    </script>
+
+    <script async src="https://docs.opencv.org/4.5.0/opencv.js" type="text/javascript"></script>
+
+    <script>
+        // 3. GŁÓWNA PĘTLA (LOGIKA V10 STRICT)
         function startAR() {
             try {
-                // PRZYGOTOWANIE MARKERA
+                // --- SETUP MARKERA ---
                 let imgEl = document.getElementById('refImage');
+                if (!imgEl.complete || imgEl.naturalWidth === 0) { throw "Błąd pliku marker.jpg"; }
+                
                 let refMat = cv.imread('refImage');
                 let refGray = new cv.Mat();
                 cv.cvtColor(refMat, refGray, cv.COLOR_RGBA2GRAY);
@@ -103,8 +132,9 @@
                 let desRef = new cv.Mat();
                 orb.detectAndCompute(refGray, new cv.Mat(), kpRef, desRef);
                 
-                log("3. Wzorzec OK. Czekam na IDEALNE dopasowanie...");
+                log("4. Wzorzec OK (" + kpRef.size() + " pkt). Skanowanie...");
 
+                // --- ZMIENNE PĘTLI ---
                 let cap = new cv.VideoCapture(video);
                 let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
                 let gray = new cv.Mat();
@@ -114,24 +144,32 @@
                 let desFrame = new cv.Mat();
                 let matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
                 
+                // Homografia vars
                 let good_matches = new cv.DMatchVector();
                 let objCorners = new cv.Mat(4, 1, cv.CV_32FC2);
                 objCorners.data32F[0] = 0; objCorners.data32F[1] = 0;
                 objCorners.data32F[2] = refGray.cols; objCorners.data32F[3] = 0;
                 objCorners.data32F[4] = refGray.cols; objCorners.data32F[5] = refGray.rows;
                 objCorners.data32F[6] = 0; objCorners.data32F[7] = refGray.rows;
-                
                 let sceneCorners = new cv.Mat(4, 1, cv.CV_32FC2);
                 let homography = new cv.Mat();
 
                 function processLoop() {
                     try {
-                        let start = Date.now();
-                        ctx.clearRect(0, 0, canvas.width, canvas.height); // Czyść ekran
-
                         if (video.paused || video.ended) { requestAnimationFrame(processLoop); return; }
 
+                        // Obsługa zmiany wymiarów
+                        if (frame.cols !== video.width || frame.rows !== video.height) {
+                            frame.delete();
+                            frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+                        }
+
+                        let start = Date.now();
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
                         cap.read(frame);
+                        
+                        // Skalowanie 320px
                         let scaleFactor = 320 / frame.cols;
                         cv.resize(frame, smallFrame, new cv.Size(320, Math.round(frame.rows * scaleFactor)));
 
@@ -139,26 +177,21 @@
                         orb.detectAndCompute(gray, new cv.Mat(), kpFrame, desFrame);
 
                         let matchesCount = 0;
-                        
                         if (!desFrame.empty() && !desRef.empty()) {
                             let matches = new cv.DMatchVector();
                             matcher.match(desRef, desFrame, matches);
 
-                            // FILTR 1: BARDZO RYGORYSTYCZNA ODLEGŁOŚĆ
-                            // Zmieniono z 60 na 45 (wymaga większego podobieństwa)
+                            // FILTR RYGORYSTYCZNY (V10)
                             let good = [];
                             for (let i = 0; i < matches.size(); i++) {
-                                if (matches.get(i).distance < 45) {
+                                if (matches.get(i).distance < 45) { // Strict distance
                                     good.push(matches.get(i));
                                 }
                             }
                             matchesCount = good.length;
 
-                            // FILTR 2: MINIMUM PUNKTÓW
-                            // Zmieniono z 15 na 22 (musi znaleźć więcej pewnych punktów)
-                            if (good.length > 22) {
-                                
-                                // Przygotowanie danych do homografii
+                            // LOGIKA RAMKI
+                            if (good.length > 22) { // Strict count
                                 for (let i = 0; i < good.length; i++) good_matches.push_back(good[i]);
                                 
                                 let obj_points = new cv.Mat(good.length, 1, cv.CV_32FC2);
@@ -175,26 +208,54 @@
                                     scene_points.data32F[i*2+1] = kpS.pt.y / scaleFactor;
                                 }
 
-                                // FILTR 3: RANSAC PROGRESYWNY (3.0 -> 5.0)
                                 homography = cv.findHomography(obj_points, scene_points, cv.RANSAC, 5.0);
 
                                 if (!homography.empty()) {
                                     cv.perspectiveTransform(objCorners, sceneCorners, homography);
 
-                                    // FILTR 4: SPRAWDZENIE CZY TO MA SENS (AREA CHECK)
-                                    // Sprawdzamy czy wykryty kształt nie jest mikroskopijny albo gigantyczny
+                                    // AREA CHECK
                                     let p1 = { x: sceneCorners.data32F[0], y: sceneCorners.data32F[1] };
                                     let p2 = { x: sceneCorners.data32F[2], y: sceneCorners.data32F[3] };
-                                    let p3 = { x: sceneCorners.data32F[4], y: sceneCorners.data32F[5] };
-                                    let dx = p2.x - p1.x;
-                                    let dy = p2.y - p1.y;
+                                    let dx = p2.x - p1.x; let dy = p2.y - p1.y;
                                     let dist = Math.sqrt(dx*dx + dy*dy);
 
-                                    // Jeśli bok logo jest mniejszy niż 50px (śmieci) -> ODRZUĆ
-                                    if (dist > 50) {
-                                        // RYSOWANIE RAMKI (Tylko jeśli przeszło wszystkie testy)
+                                    if (dist > 50) { // Musi być widoczne
+                                        let p3 = { x: sceneCorners.data32F[4], y: sceneCorners.data32F[5] };
                                         let p4 = { x: sceneCorners.data32F[6], y: sceneCorners.data32F[7] };
-                                        
+
                                         ctx.beginPath();
-                                        ctx.lineWidth = 4;
-                                        ctx.strokeStyle = "#00FF00"; // Zielona ramka = Pewność
+                                        ctx.lineWidth = 5;
+                                        ctx.strokeStyle = "#00FF00"; // ZIELONA RAMKA
+                                        ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+                                        ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
+                                        ctx.closePath();
+                                        ctx.stroke();
+
+                                        consoleDiv.innerText = "✅ PEWNY OBRAZ! (Pkt: " + matchesCount + ")";
+                                        consoleDiv.style.background = "#0f0";
+                                        consoleDiv.style.color = "#000";
+                                    }
+                                }
+                                obj_points.delete(); scene_points.delete(); good_matches.delete();
+                            } else {
+                                consoleDiv.innerText = "Skanowanie... (Pkt: " + matchesCount + "/22)";
+                                consoleDiv.style.background = "rgba(0,0,0,0.5)";
+                                consoleDiv.style.color = "#fff";
+                            }
+                            matches.delete();
+                        }
+                        
+                        requestAnimationFrame(processLoop);
+                    } catch (loopErr) {
+                        requestAnimationFrame(processLoop);
+                    }
+                }
+                requestAnimationFrame(processLoop);
+
+            } catch (err) {
+                log("BŁĄD: " + err, "red");
+            }
+        }
+    </script>
+</body>
+</html>
