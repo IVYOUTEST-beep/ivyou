@@ -3,174 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IVYOU | Silnik Diagnostyczny</title>
+    <title>IVYOU | Test Kamery (Debug)</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: monospace; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        
+        /* ZMIANA: Pokazujemy wideo pod spodem */
+        #videoInput {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
+            z-index: 1; 
+            display: block; /* ODSŁANIAMY KAMERĘ */
+        }
+
+        /* Canvas rysuje "wynik" na wierzchu */
+        #canvasOutput {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
+            z-index: 2;
+            opacity: 0.5; /* Półprzezroczysty, żebyś widział czy pasuje do kamery */
+            pointer-events: none;
+        }
         
         /* Panel Diagnostyczny */
         #console {
             position: absolute; top: 10px; left: 10px; right: 10px;
-            color: #00ff00; background: rgba(0,0,0,0.7); 
-            padding: 10px; border: 1px solid #00ff00; 
-            font-size: 12px; pointer-events: none; z-index: 100;
+            color: #fff; background: rgba(255, 0, 0, 0.7); /* Czerwony startowy */
+            padding: 15px; border: 2px solid #fff; border-radius: 10px;
+            font-size: 14px; font-weight: bold; z-index: 100;
             white-space: pre-wrap;
         }
-        
-        video { display: none; }
     </style>
 </head>
 <body>
 
-    <div id="console">Inicjalizacja...</div>
+    <div id="console">1. Startuje... Czekaj na pytanie o kamerę.</div>
     
-    <video id="videoInput" playsinline webkit-playsinline></video>
+    <video id="videoInput" playsinline webkit-playsinline autoplay muted></video>
+    
     <img id="refImage" src="marker.jpg" style="display:none;">
     <canvas id="canvasOutput"></canvas>
 
-    <script async src="https://docs.opencv.org/4.5.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+    <script async src="https://docs.opencv.org/4.5.0/opencv.js" onload="onOpenCvReady();" onerror="log('BŁĄD: Nie można pobrać OpenCV!')"></script>
 
     <script>
         let video = document.getElementById('videoInput');
         let consoleDiv = document.getElementById('console');
-        let cap, refMat, frameMat, orb, matcher;
-        let isCvLoaded = false;
+        let streamStarted = false;
 
         function log(msg) {
             consoleDiv.innerText = msg;
+            console.log(msg);
         }
 
-        function onOpenCvReady() {
-            log("OpenCV załadowane. Proszę o dostęp do kamery...");
-            startCamera();
-        }
-
-        function startCamera() {
-            const constraints = {
-                video: {
-                    facingMode: 'environment',
-                    width: { ideal: 640 }, // Mniejsza rozdzielczość = szybsze działanie
-                    height: { ideal: 480 }
-                },
-                audio: false
+        // 1. Najpierw uruchommy samą kamerę (bez czekania na OpenCV)
+        function startCameraImmediate() {
+            log("2. Proszę o dostęp do kamery...");
+            
+            // Prostsza konfiguracja - bierzemy cokolwiek działa
+            const constraints = { 
+                video: { facingMode: 'environment' }, 
+                audio: false 
             };
 
             navigator.mediaDevices.getUserMedia(constraints)
                 .then(function(stream) {
                     video.srcObject = stream;
                     video.play();
-                    video.onloadedmetadata = () => {
-                        log("Kamera działa. Wymiary: " + video.videoWidth + "x" + video.videoHeight + "\nTworzenie wzorca z marker.jpg...");
-                        // Czekamy chwilę aż wideo ruszy
-                        setTimeout(processVideo, 1000);
-                    };
+                    streamStarted = true;
+                    log("3. Kamera aktywna! \nCzekam na silnik OpenCV...");
                 })
                 .catch(function(err) {
-                    log("BŁĄD KAMERY: " + err.name + " " + err.message);
+                    // Jeśli błąd, próbujemy bez facingMode (dla starszych androidów/laptopów)
+                    log("Błąd tylnej kamery (" + err.name + "). Próbuję przednią...");
+                    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                        .then(function(stream) {
+                            video.srcObject = stream;
+                            video.play();
+                            streamStarted = true;
+                            log("3. Kamera (fallback) aktywna! \nCzekam na silnik...");
+                        })
+                        .catch(function(e) {
+                            log("BŁĄD KRYTYCZNY KAMERY: " + e.message + "\nSprawdź uprawnienia w przeglądarce!");
+                            consoleDiv.style.background = "red";
+                        });
                 });
+        }
+
+        // Uruchamiamy kamerę od razu po załadowaniu strony
+        startCameraImmediate();
+
+        function onOpenCvReady() {
+            if(!streamStarted) {
+                log("OpenCV gotowe, ale kamera jeszcze nie...");
+            } else {
+                log("4. Silnik załadowany. Startuję analizę...");
+            }
+            // Dajemy chwilę na ustabilizowanie kamery
+            setTimeout(processVideo, 2000); 
         }
 
         function processVideo() {
             try {
-                // 1. Ustawienia OpenCV
-                cap = new cv.VideoCapture(video);
-                frameMat = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+                if (!streamStarted) {
+                    setTimeout(processVideo, 500); // Spróbuj ponownie za pół sekundy
+                    return;
+                }
+
+                let cap = new cv.VideoCapture(video);
+                let frame = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+                let gray = new cv.Mat();
                 
-                // 2. Wczytanie markera
+                // Wczytanie markera
                 let imgElement = document.getElementById('refImage');
                 if (!imgElement.complete || imgElement.naturalWidth === 0) {
-                    log("BŁĄD: Nie można załadować marker.jpg! Sprawdź nazwę pliku.");
+                    log("BŁĄD: Nie widzę pliku marker.jpg! \nCzy wgrałeś go na GitHub?");
                     return;
                 }
                 
-                refMat = cv.imread('refImage');
+                let refMat = cv.imread('refImage');
                 let refGray = new cv.Mat();
-                let frameGray = new cv.Mat();
-                
-                // Konwersja wzorca na szary
                 cv.cvtColor(refMat, refGray, cv.COLOR_RGBA2GRAY);
 
-                // 3. Inicjalizacja ORB (Detektora)
-                // Zwiększamy czułość (1000 punktów zamiast 500)
-                orb = new cv.ORB(1000); 
-                
-                let keypointsRef = new cv.KeyPointVector();
-                let descriptorsRef = new cv.Mat();
-                
-                // Analiza Wzorca (Twojego Logo)
-                orb.detectAndCompute(refGray, new cv.Mat(), keypointsRef, descriptorsRef);
-                
-                if (keypointsRef.size() === 0) {
-                    log("BŁĄD KRYTYCZNY: Twoje logo jest za proste!\nAlgorytm nie widzi na nim żadnych punktów.\nSpróbuj użyć bardziej skomplikowanego zdjęcia.");
-                    return;
-                }
+                // Detektor
+                let orb = new cv.ORB(500);
+                let kpRef = new cv.KeyPointVector();
+                let desRef = new cv.Mat();
+                orb.detectAndCompute(refGray, new cv.Mat(), kpRef, desRef);
 
-                // Zmienne pętli
-                let keypointsFrame = new cv.KeyPointVector();
-                let descriptorsFrame = new cv.Mat();
-                matcher = new cv.BFMatcher(cv.NORM_HAMMING, false); // Wyłączamy cross-check dla testu (luźniejsze dopasowanie)
-                
-                log("Silnik pracuje. Punkty wzorca: " + keypointsRef.size() + "\nSzukam...");
+                let kpFrame = new cv.KeyPointVector();
+                let desFrame = new cv.Mat();
+                let matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
 
-                // --- PĘTLA ---
+                consoleDiv.style.background = "rgba(0,0,0,0.5)"; // Zmieniamy na mniej inwazyjny kolor
+
                 function loop() {
                     try {
-                        let startTime = Date.now();
+                        if (video.paused || video.ended) {
+                            requestAnimationFrame(loop);
+                            return;
+                        }
+
+                        cap.read(frame);
+                        cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
                         
-                        // Pobierz klatkę z kamery
-                        cap.read(frameMat);
-                        cv.cvtColor(frameMat, frameGray, cv.COLOR_RGBA2GRAY);
+                        orb.detectAndCompute(gray, new cv.Mat(), kpFrame, desFrame);
 
-                        // Znajdź punkty na kamerze
-                        orb.detectAndCompute(frameGray, new cv.Mat(), keypointsFrame, descriptorsFrame);
-
-                        let statusMsg = "FPS: " + Math.round(1000/(Date.now() - startTime)) + "\n";
-                        statusMsg += "Punkty kamery: " + keypointsFrame.size() + "\n";
-
-                        let goodMatchesCount = 0;
-
-                        // Porównaj tylko jeśli kamera coś widzi
-                        if (!descriptorsFrame.empty()) {
+                        let matchesCount = 0;
+                        if (!desFrame.empty()) {
                             let matches = new cv.DMatchVector();
-                            matcher.match(descriptorsRef, descriptorsFrame, matches);
-
-                            // Szukamy najlepszych dopasowań
+                            matcher.match(desRef, desFrame, matches);
                             for (let i = 0; i < matches.size(); i++) {
-                                if (matches.get(i).distance < 60) { // Czułość dystansu (im mniej tym ściślej)
-                                    goodMatchesCount++;
-                                }
+                                if (matches.get(i).distance < 50) matchesCount++;
                             }
                             matches.delete();
                         }
 
-                        statusMsg += "DOPASOWANIA: " + goodMatchesCount + " / 20";
+                        // Informacja dla Ciebie
+                        let info = "KAMERA OK | Analiza w toku...\n";
+                        info += "Punkty: " + kpFrame.size() + " | Dopasowania: " + matchesCount;
+                        
+                        consoleDiv.innerText = info;
 
-                        // Rysowanie (Pokaż kamerę na ekranie)
-                        cv.imshow('canvasOutput', frameMat); 
-
-                        // DECYZJA
-                        if (goodMatchesCount > 15) {
+                        if (matchesCount > 15) {
                             consoleDiv.style.background = "rgba(0, 255, 0, 0.8)";
                             consoleDiv.style.color = "black";
-                            consoleDiv.style.fontWeight = "bold";
-                            consoleDiv.innerText = "✅ ZNALEZIONO! (" + goodMatchesCount + ")\n(Tu pojawiłoby się wideo)";
+                            consoleDiv.innerText = "✅ ZNALEZIONO! (" + matchesCount + ")";
                         } else {
-                            consoleDiv.style.background = "rgba(0, 0, 0, 0.7)";
-                            consoleDiv.style.color = "#00ff00";
-                            consoleDiv.style.fontWeight = "normal";
-                            consoleDiv.innerText = statusMsg;
+                            consoleDiv.style.background = "rgba(0,0,0,0.6)";
+                            consoleDiv.style.color = "#fff";
                         }
 
-                        // Czyszczenie
-                        keypointsFrame.delete();
-                        descriptorsFrame.delete();
+                        // Czyścimy pamięć (ważne!)
+                        kpFrame.delete();
+                        desFrame.delete();
                         
                         requestAnimationFrame(loop);
                     } catch (err) {
                         console.error(err);
                     }
                 }
-
                 loop();
 
             } catch (e) {
