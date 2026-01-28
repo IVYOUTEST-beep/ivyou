@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IVYOU | Silnik V8 (Final)</title>
+    <title>IVYOU | Silnik V9 (Geometria)</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: monospace; }
         
@@ -12,15 +12,15 @@
             z-index: 1; 
         }
 
+        /* Canvas teraz będzie służył do rysowania RAMKI AR */
         #canvasOutput {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
-            z-index: 2; 
-            pointer-events: none; /* Kliknięcia przechodzą przez canvas */
+            z-index: 2; pointer-events: none;
         }
         
         #console {
             position: absolute; top: 10px; left: 10px; right: 10px;
-            color: #0f0; background: rgba(0, 0, 0, 0.8);
+            color: #0f0; background: rgba(0, 0, 0, 0.6);
             padding: 10px; border: 1px solid #0f0; border-radius: 8px;
             font-size: 12px; font-weight: bold; z-index: 100;
             white-space: pre-wrap;
@@ -29,7 +29,7 @@
 </head>
 <body>
 
-    <div id="console">Start V8...</div>
+    <div id="console">Start V9 (Geometria)...</div>
     
     <video id="videoInput" playsinline webkit-playsinline autoplay muted></video>
     <img id="refImage" src="marker.jpg" style="display:none;" crossorigin="anonymous">
@@ -37,6 +37,8 @@
 
     <script>
         let video = document.getElementById('videoInput');
+        let canvas = document.getElementById('canvasOutput');
+        let ctx = canvas.getContext('2d');
         let consoleDiv = document.getElementById('console');
         let openCvReady = false;
 
@@ -45,15 +47,10 @@
             console.log(msg);
         }
 
-        // Globalny łapacz błędów
-        window.onerror = function(msg, url, line) {
-            log("BŁĄD (Linia " + line + "): " + msg);
-        };
-
         var Module = {
             onRuntimeInitialized: function() {
                 openCvReady = true;
-                log("1. Biblioteka załadowana. Start kamery...");
+                log("1. Silnik gotowy. Kamera start...");
                 startCamera();
             }
         };
@@ -63,44 +60,36 @@
 
     <script>
         function startCamera() {
-            const constraints = { 
-                video: { facingMode: 'environment' }, 
-                audio: false 
-            };
-
-            navigator.mediaDevices.getUserMedia(constraints)
-                .then(function(stream) {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+                .then(stream => {
                     video.srcObject = stream;
                     video.play();
                     checkVideoSize();
                 })
-                .catch(function(err) {
-                    log("Błąd tylnej kamery. Próbuję przednią...");
-                    navigator.mediaDevices.getUserMedia({ video: true }).then((s) => {
+                .catch(err => {
+                    navigator.mediaDevices.getUserMedia({ video: true }).then(s => {
                         video.srcObject = s; video.play(); checkVideoSize();
                     });
                 });
         }
 
         function checkVideoSize() {
-            if (video.videoWidth > 0 && video.videoHeight > 0) {
-                // KLUCZOWA POPRAWKA: Przypisujemy wymiary do HTML
+            if (video.videoWidth > 0) {
                 video.width = video.videoWidth;
                 video.height = video.videoHeight;
-                
-                log("2. Kamera OK (" + video.width + "x" + video.height + ").\nStart silnika...");
-                setTimeout(startOpenCVEngine, 500);
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                log("2. Kamera OK. Start AR...");
+                setTimeout(startAR, 500);
             } else {
                 setTimeout(checkVideoSize, 100);
             }
         }
 
-        function startOpenCVEngine() {
+        function startAR() {
             try {
                 // PRZYGOTOWANIE MARKERA
                 let imgEl = document.getElementById('refImage');
-                if (!imgEl.complete || imgEl.naturalWidth === 0) { throw "Błąd pliku marker.jpg"; }
-                
                 let refMat = cv.imread('refImage');
                 let refGray = new cv.Mat();
                 cv.cvtColor(refMat, refGray, cv.COLOR_RGBA2GRAY);
@@ -108,21 +97,18 @@
                 // Skalowanie markera
                 if (refGray.cols > 500) {
                     let scale = 500 / refGray.cols;
-                    let dsize = new cv.Size(500, Math.round(refGray.rows * scale));
-                    cv.resize(refGray, refGray, dsize, 0, 0, cv.INTER_AREA);
+                    cv.resize(refGray, refGray, new cv.Size(500, Math.round(refGray.rows * scale)));
                 }
 
-                let orb = new cv.ORB(800);
+                let orb = new cv.ORB(1000);
                 let kpRef = new cv.KeyPointVector();
                 let desRef = new cv.Mat();
                 orb.detectAndCompute(refGray, new cv.Mat(), kpRef, desRef);
                 
-                if(kpRef.size() == 0) { throw "Marker ma 0 punktów!"; }
-                
-                log("3. Wzorzec OK (" + kpRef.size() + " pkt). Pętla start...");
+                log("3. Wzorzec OK (" + kpRef.size() + " pkt). Szukam kształtu...");
 
                 // ZMIENNE PĘTLI
-                let cap = new cv.VideoCapture(video); // Teraz powinno zadziałać, bo video.width jest ustawione
+                let cap = new cv.VideoCapture(video);
                 let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
                 let gray = new cv.Mat();
                 let smallFrame = new cv.Mat();
@@ -130,64 +116,139 @@
                 let kpFrame = new cv.KeyPointVector();
                 let desFrame = new cv.Mat();
                 let matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
-                let loopCount = 0;
+                
+                // Zmienne do HOMOGRAFII (Geometrii)
+                let good_matches = new cv.DMatchVector();
+                let obj = new cv.Mat();
+                let scene = new cv.Mat();
+                let masks = new cv.Mat();
+                let homography = new cv.Mat();
+                
+                // Narożniki markera (co chcemy znaleźć)
+                let objCorners = new cv.Mat(4, 1, cv.CV_32FC2);
+                objCorners.data32F[0] = 0; objCorners.data32F[1] = 0;
+                objCorners.data32F[2] = refGray.cols; objCorners.data32F[3] = 0;
+                objCorners.data32F[4] = refGray.cols; objCorners.data32F[5] = refGray.rows;
+                objCorners.data32F[6] = 0; objCorners.data32F[7] = refGray.rows;
+                
+                let sceneCorners = new cv.Mat(4, 1, cv.CV_32FC2);
 
-                // --- PĘTLA ---
                 function processLoop() {
                     try {
                         let start = Date.now();
-                        loopCount++;
+                        
+                        // Czyścimy canvas (żeby ramka nie zostawiała śladów)
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                        // 1. CZYTANIE (To tu się zacinało)
                         cap.read(frame);
 
-                        // 2. SKALOWANIE
+                        // Skalowanie
                         let scaleFactor = 320 / frame.cols;
-                        let dsize = new cv.Size(320, Math.round(frame.rows * scaleFactor));
-                        cv.resize(frame, smallFrame, dsize, 0, 0, cv.INTER_AREA);
+                        cv.resize(frame, smallFrame, new cv.Size(320, Math.round(frame.rows * scaleFactor)));
 
-                        // 3. DETEKCJA
                         cv.cvtColor(smallFrame, gray, cv.COLOR_RGBA2GRAY);
                         orb.detectAndCompute(gray, new cv.Mat(), kpFrame, desFrame);
 
-                        // 4. DOPASOWANIE
                         let matchesCount = 0;
+                        
                         if (!desFrame.empty() && !desRef.empty()) {
                             let matches = new cv.DMatchVector();
                             matcher.match(desRef, desFrame, matches);
+
+                            // Szukamy BARDZO dobrych dopasowań
+                            let good = [];
                             for (let i = 0; i < matches.size(); i++) {
-                                if (matches.get(i).distance < 60) matchesCount++;
+                                if (matches.get(i).distance < 60) {
+                                    good.push(matches.get(i));
+                                }
+                            }
+
+                            matchesCount = good.length;
+
+                            // Jeśli mamy dość punktów, liczymy GEOMETRIĘ
+                            if (good.length > 15) {
+                                // Konwersja JS Array na OpenCV Vector
+                                for (let i = 0; i < good.length; i++) {
+                                    good_matches.push_back(good[i]);
+                                }
+
+                                // Wyciągamy koordynaty punktów
+                                let obj_points = new cv.Mat(good.length, 1, cv.CV_32FC2);
+                                let scene_points = new cv.Mat(good.length, 1, cv.CV_32FC2);
+                                
+                                for (let i = 0; i < good.length; i++) {
+                                    let objIdx = good[i].queryIdx;
+                                    let sceneIdx = good[i].trainIdx;
+                                    
+                                    let kpO = kpRef.get(objIdx);
+                                    let kpS = kpFrame.get(sceneIdx);
+                                    
+                                    obj_points.data32F[i * 2] = kpO.pt.x;
+                                    obj_points.data32F[i * 2 + 1] = kpO.pt.y;
+                                    
+                                    // Musimy przeskalować punkty z małej klatki z powrotem na dużą
+                                    scene_points.data32F[i * 2] = kpS.pt.x / scaleFactor;
+                                    scene_points.data32F[i * 2 + 1] = kpS.pt.y / scaleFactor;
+                                }
+
+                                // MAGIA: Znajdź perspektywę (Homography)
+                                // Używamy RANSAC żeby odrzucić błędy (np. kubek na stole)
+                                homography = cv.findHomography(obj_points, scene_points, cv.RANSAC, 3);
+
+                                if (!homography.empty()) {
+                                    // Przeliczamy narożniki markera na ekran telefonu
+                                    cv.perspectiveTransform(objCorners, sceneCorners, homography);
+
+                                    // Rysujemy linię łączącą narożniki
+                                    let p1 = { x: sceneCorners.data32F[0], y: sceneCorners.data32F[1] };
+                                    let p2 = { x: sceneCorners.data32F[2], y: sceneCorners.data32F[3] };
+                                    let p3 = { x: sceneCorners.data32F[4], y: sceneCorners.data32F[5] };
+                                    let p4 = { x: sceneCorners.data32F[6], y: sceneCorners.data32F[7] };
+
+                                    // Rysujemy CZERWONĄ RAMKĘ AR na Twoim logo
+                                    ctx.beginPath();
+                                    ctx.lineWidth = 5;
+                                    ctx.strokeStyle = "red";
+                                    ctx.moveTo(p1.x, p1.y);
+                                    ctx.lineTo(p2.x, p2.y);
+                                    ctx.lineTo(p3.x, p3.y);
+                                    ctx.lineTo(p4.x, p4.y);
+                                    ctx.closePath();
+                                    ctx.stroke();
+
+                                    consoleDiv.innerText = "✅ GEOMETRIA OK! Logo namierzone.";
+                                    consoleDiv.style.background = "#0f0";
+                                    consoleDiv.style.color = "#000";
+                                } else {
+                                    consoleDiv.innerText = "Widzę punkty, ale to nie jest płaskie logo...";
+                                    consoleDiv.style.background = "orange";
+                                }
+
+                                // Czyszczenie tymczasowych wektorów
+                                obj_points.delete(); scene_points.delete(); good_matches.delete();
+                            } else {
+                                consoleDiv.innerText = "Szukam... (Pkt: " + matchesCount + ")";
+                                consoleDiv.style.background = "rgba(0,0,0,0.5)";
+                                consoleDiv.style.color = "#fff";
                             }
                             matches.delete();
                         }
 
-                        // 5. STATUS NA EKRANIE
+                        // FPS
                         let fps = Math.round(1000 / (Date.now() - start));
-                        let msg = "LOOP: " + loopCount + " | FPS: " + fps + "\n";
-                        msg += "Punkty: " + kpFrame.size() + " | MATCH: " + matchesCount;
                         
-                        // ZMIANA KOLORU JAK ZNAJDZIE
-                        if (matchesCount > 15) {
-                            consoleDiv.style.background = "#0f0"; // Zielony
-                            consoleDiv.style.color = "#000";
-                            consoleDiv.innerText = "✅ ZNALEZIONO! (" + matchesCount + ")";
-                        } else {
-                            consoleDiv.style.background = "rgba(0,0,0,0.5)";
-                            consoleDiv.style.color = "#0f0";
-                            consoleDiv.innerText = msg;
-                        }
-
                         requestAnimationFrame(processLoop);
 
-                    } catch (loopError) {
-                        log("BŁĄD PĘTLI: " + loopError);
+                    } catch (err) {
+                        // Ignoruj błędy pojedynczych klatek
+                        requestAnimationFrame(processLoop);
                     }
                 }
 
                 requestAnimationFrame(processLoop);
 
             } catch (err) {
-                log("BŁĄD SETUPU: " + err);
+                log("BŁĄD: " + err, "red");
             }
         }
     </script>
