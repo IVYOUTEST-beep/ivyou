@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IVYOU | Silnik V2 (Fix)</title>
+    <title>IVYOU | Silnik V3 (Stabilny)</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: monospace; }
         
@@ -19,16 +19,16 @@
         
         #console {
             position: absolute; top: 10px; left: 10px; right: 10px;
-            color: #fff; background: rgba(0, 0, 255, 0.6); /* Niebieski startowy */
-            padding: 15px; border: 2px solid #fff; border-radius: 10px;
+            color: #fff; background: rgba(0, 0, 0, 0.8);
+            padding: 15px; border: 1px solid #fff; border-radius: 10px;
             font-size: 13px; font-weight: bold; z-index: 100;
-            white-space: pre-wrap; word-break: break-word;
+            white-space: pre-wrap;
         }
     </style>
 </head>
 <body>
 
-    <div id="console">1. Start systemu...</div>
+    <div id="console">Ładowanie strony...</div>
     
     <video id="videoInput" playsinline webkit-playsinline autoplay muted></video>
     <img id="refImage" src="marker.jpg" style="display:none;">
@@ -37,25 +37,32 @@
     <script>
         let video = document.getElementById('videoInput');
         let consoleDiv = document.getElementById('console');
-        let streamStarted = false;
         let openCvReady = false;
 
-        // Funkcja logowania na ekranie (żebyś widział błędy na telefonie)
-        function log(msg) {
+        function log(msg, color = "#fff") {
             consoleDiv.innerText = msg;
+            consoleDiv.style.color = color;
             console.log(msg);
         }
 
-        // Globalne wyłapywanie błędów (np. błąd pamięci, literówki)
-        window.onerror = function(message, source, lineno, colno, error) {
-            consoleDiv.style.background = "red";
-            log("BŁĄD KRYTYCZNY:\n" + message + "\nLinia: " + lineno);
+        window.onerror = function(message) {
+            log("BŁĄD PRZEGLĄDARKI:\n" + message, "red");
         };
 
-        // 1. URUCHAMIANIE KAMERY
+        var Module = {
+            onRuntimeInitialized: function() {
+                openCvReady = true;
+                log("1. OpenCV załadowane. Startuję kamerę...");
+                startCamera();
+            }
+        };
+    </script>
+
+    <script async src="https://docs.opencv.org/4.5.0/opencv.js" type="text/javascript"></script>
+
+    <script>
+        // 2. KAMERA
         function startCamera() {
-            log("2. Uruchamiam kamerę...");
-            
             const constraints = { 
                 video: { facingMode: 'environment' }, 
                 audio: false 
@@ -65,112 +72,85 @@
                 .then(function(stream) {
                     video.srcObject = stream;
                     video.play();
-                    streamStarted = true;
-                    checkSystemReady();
+                    
+                    // Zamiast ufać "onloadedmetadata", sprawdzamy aktywnie wymiary
+                    waitForVideoDimensions();
                 })
                 .catch(function(err) {
-                    log("Błąd tylnej kamery (" + err.name + "). Próbuję przednią...");
-                    // Fallback dla przedniej kamery
+                    log("Błąd kamery tylnej. Próbuję przednią...", "orange");
                     navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                        .then(function(stream) {
+                        .then((stream) => {
                             video.srcObject = stream;
                             video.play();
-                            streamStarted = true;
-                            checkSystemReady();
+                            waitForVideoDimensions();
                         })
-                        .catch(function(e) {
-                            consoleDiv.style.background = "red";
-                            log("KAMERA ZABLOKOWANA: " + e.message);
-                        });
+                        .catch((e) => log("KAMERA ZABLOKOWANA: " + e.message, "red"));
                 });
         }
 
-        // 2. KONFIGURACJA OPENCV (To jest kluczowa zmiana!)
-        var Module = {
-            onRuntimeInitialized: function() {
-                openCvReady = true;
-                checkSystemReady();
-            },
-            onError: function(err) {
-                consoleDiv.style.background = "red";
-                log("Błąd ładowania OpenCV (WASM): " + err);
+        // 3. AKTYWNE OCZEKIWANIE NA OBRAZ (To naprawia "zacięcie")
+        function waitForVideoDimensions() {
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                log("2. Kamera ma wymiary: " + video.videoWidth + "x" + video.videoHeight + "\nInicjalizacja silnika...");
+                setTimeout(startEngine, 500); // Małe opóźnienie dla stabilności
+            } else {
+                log("Czekam na obraz z kamery...");
+                requestAnimationFrame(waitForVideoDimensions);
             }
-        };
-
-        function checkSystemReady() {
-            if (!streamStarted) {
-                log("Kamera OK. Czekam na OpenCV (pobieranie 8MB)...");
-                return;
-            }
-            if (!openCvReady) {
-                log("Kamera OK. Kompilacja silnika OpenCV...");
-                return;
-            }
-            
-            // Jeśli oba gotowe -> Startujemy!
-            log("4. SYSTEM GOTOWY! Startuję analizę...");
-            setTimeout(processVideo, 500);
         }
 
-        // Startujemy kamerę od razu
-        startCamera();
-
-    </script>
-
-    <script async src="https://docs.opencv.org/4.5.0/opencv.js" type="text/javascript"></script>
-
-    <script>
-        // 3. GŁÓWNA PĘTLA ANALIZY
-        function processVideo() {
+        // 4. GŁÓWNY SILNIK
+        function startEngine() {
             try {
+                // Krok A: Czytanie markera
+                let imgElement = document.getElementById('refImage');
+                if (!imgElement.complete || imgElement.naturalWidth === 0) {
+                    log("BŁĄD: Plik 'marker.jpg' się nie wczytał!\nSprawdź nazwę pliku na GitHub.", "red");
+                    return;
+                }
+
+                // Krok B: Konfiguracja OpenCV
                 let cap = new cv.VideoCapture(video);
                 let frame = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
                 let gray = new cv.Mat();
-                
-                // Wczytanie markera
-                let imgElement = document.getElementById('refImage');
-                if (!imgElement.complete || imgElement.naturalWidth === 0) {
-                    consoleDiv.style.background = "orange";
-                    log("OSTRZEŻENIE: Plik 'marker.jpg' się nie wczytał.\nUpewnij się, że jest w repozytorium!");
-                    return;
-                }
                 
                 let refMat = cv.imread('refImage');
                 let refGray = new cv.Mat();
                 cv.cvtColor(refMat, refGray, cv.COLOR_RGBA2GRAY);
 
-                // Detektor ORB (szybki)
-                let orb = new cv.ORB(500);
+                // Krok C: Detektor
+                log("3. Tworzenie wzorca logo...");
+                let orb = new cv.ORB(800); // 800 punktów
                 let kpRef = new cv.KeyPointVector();
                 let desRef = new cv.Mat();
-                
-                // Analiza wzorca
                 orb.detectAndCompute(refGray, new cv.Mat(), kpRef, desRef);
-                
+
                 if (kpRef.size() === 0) {
-                    consoleDiv.style.background = "orange";
-                    log("OSTRZEŻENIE: Logo jest zbyt proste (0 pkt).\nAlgorytm potrzebuje detali/szumu.");
+                    log("OSTRZEŻENIE: Logo jest za proste (0 punktów)!\nAlgorytm potrzebuje detali.", "orange");
                     return;
                 }
 
+                // Krok D: Pętla
                 let kpFrame = new cv.KeyPointVector();
                 let desFrame = new cv.Mat();
                 let matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
 
-                consoleDiv.style.background = "rgba(0,0,0,0.5)"; 
+                consoleDiv.style.background = "rgba(0,0,0,0.5)"; // Przezroczyste tło po starcie
 
                 function loop() {
                     try {
-                        if (!streamStarted || video.paused || video.ended) {
+                        if (video.paused || video.ended) {
                             requestAnimationFrame(loop);
                             return;
                         }
+
+                        let start = Date.now();
 
                         // Pobranie klatki
                         cap.read(frame);
                         cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
                         
-                        // Analiza klatki
+                        // Analiza
                         orb.detectAndCompute(gray, new cv.Mat(), kpFrame, desFrame);
 
                         let matchesCount = 0;
@@ -178,45 +158,47 @@
                             let matches = new cv.DMatchVector();
                             matcher.match(desRef, desFrame, matches);
                             
-                            // Proste filtrowanie
+                            // Filtrowanie (czułość)
                             for (let i = 0; i < matches.size(); i++) {
-                                if (matches.get(i).distance < 60) matchesCount++;
+                                if (matches.get(i).distance < 55) matchesCount++;
                             }
                             matches.delete();
                         }
 
-                        // Aktualizacja statusu
-                        let info = "SILNIK PRACUJE | Szukam logo...\n";
-                        info += "Punkty kamery: " + kpFrame.size() + "\n";
-                        info += "Dopasowania: " + matchesCount;
-                        
-                        consoleDiv.innerText = info;
+                        // FPS Counter
+                        let fps = Math.round(1000 / (Date.now() - start));
 
+                        // Status
+                        let statusText = "SILNIK DZIAŁA (" + fps + " FPS)\n";
+                        statusText += "Punkty: " + kpFrame.size() + " | Dopasowania: " + matchesCount + "/20";
+                        consoleDiv.innerText = statusText;
+
+                        // Decyzja
                         if (matchesCount > 15) {
                             consoleDiv.style.background = "rgba(0, 255, 0, 0.8)";
                             consoleDiv.style.color = "black";
-                            consoleDiv.innerText = "✅ ZNALEZIONO OBRAZ! (" + matchesCount + ")";
+                            consoleDiv.innerText = "✅ ZNALEZIONO! (" + matchesCount + ")";
                         } else {
-                            consoleDiv.style.background = "rgba(0,0,0,0.6)";
                             consoleDiv.style.color = "#fff";
+                            consoleDiv.style.background = "rgba(0,0,0,0.5)";
                         }
 
-                        // Czyszczenie pamięci (bez tego telefon się zawiesi)
+                        // Czyszczenie pamięci
                         kpFrame.delete();
                         desFrame.delete();
                         
                         requestAnimationFrame(loop);
-                    } catch (err) {
-                        // Ignorujemy pojedyncze błędy klatek, żeby nie stopować pętli
+                    } catch (loopErr) {
+                        // Ignorujemy błędy pojedynczych klatek
+                        requestAnimationFrame(loop);
                     }
                 }
                 
-                // START PĘTLI
+                // Start
                 loop();
 
-            } catch (e) {
-                consoleDiv.style.background = "red";
-                log("BŁĄD WEWNĘTRZNY: " + e);
+            } catch (err) {
+                log("KRYTYCZNY BŁĄD SILNIKA:\n" + err, "red");
             }
         }
     </script>
