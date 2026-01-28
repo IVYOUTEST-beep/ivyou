@@ -3,32 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IVYOU | Silnik V4 (Lekki)</title>
+    <title>IVYOU | Silnik V5 (Deep Debug)</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: monospace; }
         
         #videoInput {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
-            z-index: 1; display: block;
+            z-index: 1; opacity: 0; /* Ukrywamy surowe wideo */
         }
 
         #canvasOutput {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
-            z-index: 2; opacity: 0.5; pointer-events: none;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;
+            z-index: 2; background: #222; /* Tło pod canvasem */
         }
         
         #console {
             position: absolute; top: 10px; left: 10px; right: 10px;
             color: #fff; background: rgba(0, 0, 0, 0.8);
             padding: 10px; border: 1px solid #fff; border-radius: 8px;
-            font-size: 12px; font-weight: bold; z-index: 100;
+            font-size: 11px; font-weight: bold; z-index: 100;
             white-space: pre-wrap;
         }
     </style>
 </head>
 <body>
 
-    <div id="console">Start V4...</div>
+    <div id="console">Start V5...</div>
     
     <video id="videoInput" playsinline webkit-playsinline autoplay muted></video>
     <img id="refImage" src="marker.jpg" style="display:none;" crossorigin="anonymous">
@@ -45,14 +45,14 @@
             console.log(msg);
         }
 
-        window.onerror = function(msg) {
-            log("BŁĄD PRZEGLĄDARKI: " + msg, "red");
+        window.onerror = function(msg, url, line) {
+            log("BŁĄD KRYTYCZNY (Linia " + line + "):\n" + msg, "red");
         };
 
         var Module = {
             onRuntimeInitialized: function() {
                 openCvReady = true;
-                log("1. OpenCV gotowe. Start kamery...");
+                log("1. Biblioteka załadowana. Start kamery...");
                 startCamera();
             }
         };
@@ -68,132 +68,123 @@
             }).then(function(stream) {
                 video.srcObject = stream;
                 video.play();
-                waitForVideoDimensions();
+                checkVideoSize();
             }).catch(function(err) {
-                // Fallback dla kamery
-                navigator.mediaDevices.getUserMedia({ video: true })
-                    .then((s) => { video.srcObject = s; video.play(); waitForVideoDimensions(); })
-                    .catch((e) => log("BRAK KAMERY: " + e.message, "red"));
+                log("Brak kamery tylnej. Próbuję inną...", "orange");
+                navigator.mediaDevices.getUserMedia({ video: true }).then((s) => {
+                    video.srcObject = s; video.play(); checkVideoSize();
+                }).catch((e) => log("KAMERA ERROR: " + e.message, "red"));
             });
         }
 
-        function waitForVideoDimensions() {
-            if (video.videoWidth > 0) {
-                log("2. Kamera OK (" + video.videoWidth + "x" + video.videoHeight + ")\nAnaliza markera...");
-                setTimeout(startEngine, 100);
+        function checkVideoSize() {
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                log("2. Kamera OK (" + video.videoWidth + "x" + video.videoHeight + ").\nStart silnika...");
+                setTimeout(startOpenCVEngine, 500);
             } else {
-                requestAnimationFrame(waitForVideoDimensions);
+                setTimeout(checkVideoSize, 100);
             }
         }
 
-        function startEngine() {
+        function startOpenCVEngine() {
             try {
-                // KROK A: Sprawdzenie pliku
-                let imgEl = document.getElementById('refImage');
-                if (!imgEl.complete || imgEl.naturalWidth === 0) {
-                    log("BŁĄD: Plik 'marker.jpg' nie istnieje lub jest uszkodzony!", "red");
-                    return;
-                }
-
-                log("3. Przetwarzanie markera (Wymiary: " + imgEl.naturalWidth + "px)...");
-
-                // Krok B: Wczytanie i ZMNIEJSZENIE markera (Kluczowa poprawka)
-                let refMatRaw = cv.imread('refImage');
-                let refMat = new cv.Mat();
-                let refGray = new cv.Mat();
-
-                // Skalowanie do max 500px (żeby nie zabić telefonu)
-                let scale = 500 / imgEl.naturalWidth;
-                if (scale < 1) {
-                    let newSize = new cv.Size(Math.round(imgEl.naturalWidth * scale), Math.round(imgEl.naturalHeight * scale));
-                    cv.resize(refMatRaw, refMat, newSize, 0, 0, cv.INTER_AREA);
-                    log("-> Zmniejszono marker do " + newSize.width + "px dla wydajności.");
-                } else {
-                    refMatRaw.copyTo(refMat);
-                }
-                refMatRaw.delete(); // Zwolnij pamięć
-
-                cv.cvtColor(refMat, refGray, cv.COLOR_RGBA2GRAY);
-
-                // Krok C: Detekcja Cech
-                let orb = new cv.ORB(1000); 
-                let kpRef = new cv.KeyPointVector();
-                let desRef = new cv.Mat();
-                
-                orb.detectAndCompute(refGray, new cv.Mat(), kpRef, desRef);
-
-                if (kpRef.size() < 10) {
-                    log("BŁĄD: Logo jest za proste (" + kpRef.size() + " pkt).\nAlgorytm nie widzi detali.", "orange");
-                    return;
-                }
-
-                log("4. Wzorzec gotowy (" + kpRef.size() + " pkt). Start pętli...");
-
-                // Zmienne operacyjne
+                // KROK A: PRZYGOTOWANIE ZMIENNYCH (poza pętlą)
                 let cap = new cv.VideoCapture(video);
                 let frame = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
                 let gray = new cv.Mat();
+                let smallFrame = new cv.Mat(); // Do zmniejszania
+                
+                // KROK B: MARKER
+                let imgEl = document.getElementById('refImage');
+                if (!imgEl.complete || imgEl.naturalWidth === 0) { throw "Błąd ładowania pliku marker.jpg"; }
+                
+                let refMat = cv.imread('refImage');
+                let refGray = new cv.Mat();
+                cv.cvtColor(refMat, refGray, cv.COLOR_RGBA2GRAY);
+                
+                // KROK C: ORB
+                let orb = new cv.ORB(800);
+                let kpRef = new cv.KeyPointVector();
+                let desRef = new cv.Mat();
+                orb.detectAndCompute(refGray, new cv.Mat(), kpRef, desRef);
+                
+                if(kpRef.size() == 0) { throw "Marker ma 0 punktów!"; }
+                
+                log("3. Wzorzec OK (" + kpRef.size() + " pkt). Pętla start...", "cyan");
+
+                // ZMIENNE PĘTLI
                 let kpFrame = new cv.KeyPointVector();
                 let desFrame = new cv.Mat();
                 let matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
-                let frameResized = new cv.Mat(); // Do zmniejszania klatki z kamery
+                let loopCount = 0;
 
-                consoleDiv.style.background = "rgba(0,0,0,0.5)";
-
-                // PĘTLA GŁÓWNA
-                function loop() {
+                // --- PĘTLA ---
+                function processLoop() {
                     try {
+                        loopCount++;
                         let start = Date.now();
 
+                        // 1. CZYTANIE KLATKI
                         cap.read(frame);
-                        
-                        // Optymalizacja: Zmniejszamy klatkę z kamery do analizy (szybkość x2)
-                        let downScale = 0.5; 
-                        let smallSize = new cv.Size(frame.cols * downScale, frame.rows * downScale);
-                        cv.resize(frame, frameResized, smallSize);
-                        cv.cvtColor(frameResized, gray, cv.COLOR_RGBA2GRAY);
 
+                        // 2. SKALOWANIE (Dla szybkości i pamięci)
+                        // Zmniejszamy do szerokości 320px (bardzo lekko)
+                        let scaleFactor = 320 / frame.cols;
+                        let dsize = new cv.Size(320, Math.round(frame.rows * scaleFactor));
+                        cv.resize(frame, smallFrame, dsize, 0, 0, cv.INTER_AREA);
+
+                        // 3. KONWERSJA NA SZARY (To widzi robot)
+                        cv.cvtColor(smallFrame, gray, cv.COLOR_RGBA2GRAY);
+
+                        // 4. DETEKCJA
                         orb.detectAndCompute(gray, new cv.Mat(), kpFrame, desFrame);
 
+                        // 5. DOPASOWANIE
                         let matchesCount = 0;
                         if (!desFrame.empty() && !desRef.empty()) {
                             let matches = new cv.DMatchVector();
                             matcher.match(desRef, desFrame, matches);
-                            
                             for (let i = 0; i < matches.size(); i++) {
                                 if (matches.get(i).distance < 60) matchesCount++;
                             }
                             matches.delete();
                         }
 
-                        let fps = Math.round(1000 / (Date.now() - start));
-                        let info = "SILNIK DZIAŁA (" + fps + " FPS) | Pkt: " + kpFrame.size() + "\n";
-                        info += "DOPASOWANIA: " + matchesCount;
-                        
-                        consoleDiv.innerText = info;
+                        // 6. RYSOWANIE (DEBUG) - Pokaż to co widzi robot!
+                        cv.imshow('canvasOutput', gray); 
 
-                        if (matchesCount > 10) { // Zmniejszony próg dla testu
-                            consoleDiv.style.background = "rgba(0, 255, 0, 0.8)";
-                            consoleDiv.style.color = "black";
+                        // 7. STATUS
+                        let fps = Math.round(1000 / (Date.now() - start));
+                        let msg = "LOOP: " + loopCount + " | FPS: " + fps + "\n";
+                        msg += "Punkty: " + kpFrame.size() + " | MATCH: " + matchesCount;
+                        
+                        consoleDiv.innerText = msg;
+
+                        if (matchesCount > 10) {
+                            consoleDiv.style.background = "#0f0";
+                            consoleDiv.style.color = "#000";
                             consoleDiv.innerText = "✅ ZNALEZIONO! (" + matchesCount + ")";
                         } else {
-                            consoleDiv.style.color = "#fff";
                             consoleDiv.style.background = "rgba(0,0,0,0.5)";
+                            consoleDiv.style.color = "#fff";
                         }
 
-                        // Czyść pamięć
-                        /* Nie czyścimy frame/gray/frameResized co klatkę by nie alokować, 
-                           ale tutaj OpenCV.js wymaga ostrożności. */
+                        // CZYSZCZENIE (Bardzo ważne w OpenCV.js)
+                        // kpFrame.delete(); // UWAGA: W tej wersji NIE usuwamy wektorów co klatkę, 
+                        // tylko pozwalamy ORB je nadpisać (bezpieczniej dla pamięci JS)
                         
-                        requestAnimationFrame(loop);
-                    } catch (err) {
-                        console.log(err);
+                        requestAnimationFrame(processLoop);
+
+                    } catch (loopError) {
+                        log("BŁĄD PĘTLI:\n" + loopError, "red");
                     }
                 }
-                loop();
 
-            } catch (e) {
-                log("BŁĄD: " + e, "red");
+                // START
+                requestAnimationFrame(processLoop);
+
+            } catch (err) {
+                log("BŁĄD INICJALIZACJI:\n" + err, "red");
             }
         }
     </script>
