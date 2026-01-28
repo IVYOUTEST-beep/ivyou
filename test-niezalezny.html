@@ -3,37 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IVYOU | Silnik V7 (Odsłonięty)</title>
+    <title>IVYOU | Silnik V8 (Final)</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: monospace; }
         
-        /* POPRAWKA: Kamera jest teraz zawsze widoczna */
         #videoInput {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
             z-index: 1; 
-            display: block; 
-            opacity: 1 !important; /* Wymuszamy widoczność */
         }
 
-        /* Canvas rysuje na wierzchu (półprzezroczysty zielony, gdy wykryje) */
         #canvasOutput {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
             z-index: 2; 
-            pointer-events: none;
+            pointer-events: none; /* Kliknięcia przechodzą przez canvas */
         }
         
         #console {
             position: absolute; top: 10px; left: 10px; right: 10px;
-            color: #fff; background: rgba(0, 0, 0, 0.8);
-            padding: 10px; border: 1px solid #fff; border-radius: 8px;
-            font-size: 11px; font-weight: bold; z-index: 100;
+            color: #0f0; background: rgba(0, 0, 0, 0.8);
+            padding: 10px; border: 1px solid #0f0; border-radius: 8px;
+            font-size: 12px; font-weight: bold; z-index: 100;
             white-space: pre-wrap;
         }
     </style>
 </head>
 <body>
 
-    <div id="console">Start V7...</div>
+    <div id="console">Start V8...</div>
     
     <video id="videoInput" playsinline webkit-playsinline autoplay muted></video>
     <img id="refImage" src="marker.jpg" style="display:none;" crossorigin="anonymous">
@@ -44,20 +40,20 @@
         let consoleDiv = document.getElementById('console');
         let openCvReady = false;
 
-        function log(msg, color = "#fff") {
+        function log(msg) {
             consoleDiv.innerText = msg;
-            consoleDiv.style.color = color;
             console.log(msg);
         }
 
+        // Globalny łapacz błędów
         window.onerror = function(msg, url, line) {
-            log("BŁĄD JS (Linia " + line + "):\n" + msg, "red");
+            log("BŁĄD (Linia " + line + "): " + msg);
         };
 
         var Module = {
             onRuntimeInitialized: function() {
                 openCvReady = true;
-                log("1. Biblioteka OK. Start kamery...");
+                log("1. Biblioteka załadowana. Start kamery...");
                 startCamera();
             }
         };
@@ -75,20 +71,24 @@
             navigator.mediaDevices.getUserMedia(constraints)
                 .then(function(stream) {
                     video.srcObject = stream;
-                    video.play(); // Wymuszamy start
+                    video.play();
                     checkVideoSize();
                 })
                 .catch(function(err) {
-                    log("Brak tylnej kamery. Próbuję inną...", "orange");
+                    log("Błąd tylnej kamery. Próbuję przednią...");
                     navigator.mediaDevices.getUserMedia({ video: true }).then((s) => {
                         video.srcObject = s; video.play(); checkVideoSize();
-                    }).catch((e) => log("KAMERA ERROR: " + e.message, "red"));
+                    });
                 });
         }
 
         function checkVideoSize() {
             if (video.videoWidth > 0 && video.videoHeight > 0) {
-                log("2. Kamera OK (" + video.videoWidth + "x" + video.videoHeight + ").\nStart silnika...");
+                // KLUCZOWA POPRAWKA: Przypisujemy wymiary do HTML
+                video.width = video.videoWidth;
+                video.height = video.videoHeight;
+                
+                log("2. Kamera OK (" + video.width + "x" + video.height + ").\nStart silnika...");
                 setTimeout(startOpenCVEngine, 500);
             } else {
                 setTimeout(checkVideoSize, 100);
@@ -117,13 +117,13 @@
                 let desRef = new cv.Mat();
                 orb.detectAndCompute(refGray, new cv.Mat(), kpRef, desRef);
                 
-                if(kpRef.size() < 5) { throw "Logo za proste! (0 pkt)"; }
+                if(kpRef.size() == 0) { throw "Marker ma 0 punktów!"; }
                 
-                log("3. Wzorzec OK (" + kpRef.size() + " pkt). Pętla start...", "cyan");
+                log("3. Wzorzec OK (" + kpRef.size() + " pkt). Pętla start...");
 
                 // ZMIENNE PĘTLI
-                let cap = new cv.VideoCapture(video);
-                let frame = new cv.Mat(); 
+                let cap = new cv.VideoCapture(video); // Teraz powinno zadziałać, bo video.width jest ustawione
+                let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
                 let gray = new cv.Mat();
                 let smallFrame = new cv.Mat();
                 
@@ -135,29 +135,13 @@
                 // --- PĘTLA ---
                 function processLoop() {
                     try {
-                        if (video.paused || video.ended) {
-                            requestAnimationFrame(processLoop);
-                            return;
-                        }
-
-                        // Obsługa zmiany rozdzielczości
-                        if (video.videoWidth === 0 || video.videoHeight === 0) {
-                            requestAnimationFrame(processLoop);
-                            return;
-                        }
-
-                        if (frame.cols !== video.videoWidth || frame.rows !== video.videoHeight) {
-                            frame.delete();
-                            frame = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
-                        }
-
                         let start = Date.now();
                         loopCount++;
 
-                        // 1. CZYTANIE
+                        // 1. CZYTANIE (To tu się zacinało)
                         cap.read(frame);
 
-                        // 2. SKALOWANIE (320px szerokości dla wydajności)
+                        // 2. SKALOWANIE
                         let scaleFactor = 320 / frame.cols;
                         let dsize = new cv.Size(320, Math.round(frame.rows * scaleFactor));
                         cv.resize(frame, smallFrame, dsize, 0, 0, cv.INTER_AREA);
@@ -177,44 +161,33 @@
                             matches.delete();
                         }
 
-                        // 5. STATUS
+                        // 5. STATUS NA EKRANIE
                         let fps = Math.round(1000 / (Date.now() - start));
                         let msg = "LOOP: " + loopCount + " | FPS: " + fps + "\n";
-                        msg += "Punkty kamery: " + kpFrame.size() + "\nDOPASOWANIA: " + matchesCount + "/20";
+                        msg += "Punkty: " + kpFrame.size() + " | MATCH: " + matchesCount;
                         
-                        consoleDiv.innerText = msg;
-
-                        // 6. SYGNALIZACJA SUKCESU
+                        // ZMIANA KOLORU JAK ZNAJDZIE
                         if (matchesCount > 15) {
-                            consoleDiv.style.background = "#0f0";
+                            consoleDiv.style.background = "#0f0"; // Zielony
                             consoleDiv.style.color = "#000";
                             consoleDiv.innerText = "✅ ZNALEZIONO! (" + matchesCount + ")";
-                            
-                            // Opcjonalnie: narysuj prostokąt na canvasie żeby potwierdzić
-                            // Ale nie nadpisujemy całego obrazu, żebyś widział kamerę
                         } else {
                             consoleDiv.style.background = "rgba(0,0,0,0.5)";
-                            consoleDiv.style.color = "#fff";
-                            
-                            // Czyścimy canvas (żeby był przezroczysty)
-                            let canvas = document.getElementById('canvasOutput');
-                            let ctx = canvas.getContext('2d');
-                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            consoleDiv.style.color = "#0f0";
+                            consoleDiv.innerText = msg;
                         }
-                        
+
                         requestAnimationFrame(processLoop);
 
                     } catch (loopError) {
-                         // Ignorujemy pojedyncze błędy
-                        requestAnimationFrame(processLoop);
+                        log("BŁĄD PĘTLI: " + loopError);
                     }
                 }
 
-                // START
                 requestAnimationFrame(processLoop);
 
             } catch (err) {
-                log("BŁĄD SETUPU:\n" + err, "red");
+                log("BŁĄD SETUPU: " + err);
             }
         }
     </script>
