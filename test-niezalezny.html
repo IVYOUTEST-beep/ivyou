@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IVYOU | Silnik V9 (Geometria)</title>
+    <title>IVYOU | Silnik V10 (Strict)</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: monospace; }
         
@@ -12,7 +12,6 @@
             z-index: 1; 
         }
 
-        /* Canvas teraz będzie służył do rysowania RAMKI AR */
         #canvasOutput {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
             z-index: 2; pointer-events: none;
@@ -20,8 +19,8 @@
         
         #console {
             position: absolute; top: 10px; left: 10px; right: 10px;
-            color: #0f0; background: rgba(0, 0, 0, 0.6);
-            padding: 10px; border: 1px solid #0f0; border-radius: 8px;
+            color: #fff; background: rgba(0, 0, 0, 0.6);
+            padding: 10px; border: 1px solid #fff; border-radius: 8px;
             font-size: 12px; font-weight: bold; z-index: 100;
             white-space: pre-wrap;
         }
@@ -29,7 +28,7 @@
 </head>
 <body>
 
-    <div id="console">Start V9 (Geometria)...</div>
+    <div id="console">Start V10 (Rygorystyczny)...</div>
     
     <video id="videoInput" playsinline webkit-playsinline autoplay muted></video>
     <img id="refImage" src="marker.jpg" style="display:none;" crossorigin="anonymous">
@@ -50,7 +49,7 @@
         var Module = {
             onRuntimeInitialized: function() {
                 openCvReady = true;
-                log("1. Silnik gotowy. Kamera start...");
+                log("1. Silnik OK. Kamera start...");
                 startCamera();
             }
         };
@@ -79,7 +78,7 @@
                 video.height = video.videoHeight;
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                log("2. Kamera OK. Start AR...");
+                log("2. Kamera OK. Start analizy...");
                 setTimeout(startAR, 500);
             } else {
                 setTimeout(checkVideoSize, 100);
@@ -94,7 +93,6 @@
                 let refGray = new cv.Mat();
                 cv.cvtColor(refMat, refGray, cv.COLOR_RGBA2GRAY);
                 
-                // Skalowanie markera
                 if (refGray.cols > 500) {
                     let scale = 500 / refGray.cols;
                     cv.resize(refGray, refGray, new cv.Size(500, Math.round(refGray.rows * scale)));
@@ -105,9 +103,8 @@
                 let desRef = new cv.Mat();
                 orb.detectAndCompute(refGray, new cv.Mat(), kpRef, desRef);
                 
-                log("3. Wzorzec OK (" + kpRef.size() + " pkt). Szukam kształtu...");
+                log("3. Wzorzec OK. Czekam na IDEALNE dopasowanie...");
 
-                // ZMIENNE PĘTLI
                 let cap = new cv.VideoCapture(video);
                 let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
                 let gray = new cv.Mat();
@@ -117,14 +114,7 @@
                 let desFrame = new cv.Mat();
                 let matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
                 
-                // Zmienne do HOMOGRAFII (Geometrii)
                 let good_matches = new cv.DMatchVector();
-                let obj = new cv.Mat();
-                let scene = new cv.Mat();
-                let masks = new cv.Mat();
-                let homography = new cv.Mat();
-                
-                // Narożniki markera (co chcemy znaleźć)
                 let objCorners = new cv.Mat(4, 1, cv.CV_32FC2);
                 objCorners.data32F[0] = 0; objCorners.data32F[1] = 0;
                 objCorners.data32F[2] = refGray.cols; objCorners.data32F[3] = 0;
@@ -132,17 +122,16 @@
                 objCorners.data32F[6] = 0; objCorners.data32F[7] = refGray.rows;
                 
                 let sceneCorners = new cv.Mat(4, 1, cv.CV_32FC2);
+                let homography = new cv.Mat();
 
                 function processLoop() {
                     try {
                         let start = Date.now();
-                        
-                        // Czyścimy canvas (żeby ramka nie zostawiała śladów)
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.clearRect(0, 0, canvas.width, canvas.height); // Czyść ekran
+
+                        if (video.paused || video.ended) { requestAnimationFrame(processLoop); return; }
 
                         cap.read(frame);
-
-                        // Skalowanie
                         let scaleFactor = 320 / frame.cols;
                         cv.resize(frame, smallFrame, new cv.Size(320, Math.round(frame.rows * scaleFactor)));
 
@@ -155,102 +144,57 @@
                             let matches = new cv.DMatchVector();
                             matcher.match(desRef, desFrame, matches);
 
-                            // Szukamy BARDZO dobrych dopasowań
+                            // FILTR 1: BARDZO RYGORYSTYCZNA ODLEGŁOŚĆ
+                            // Zmieniono z 60 na 45 (wymaga większego podobieństwa)
                             let good = [];
                             for (let i = 0; i < matches.size(); i++) {
-                                if (matches.get(i).distance < 60) {
+                                if (matches.get(i).distance < 45) {
                                     good.push(matches.get(i));
                                 }
                             }
-
                             matchesCount = good.length;
 
-                            // Jeśli mamy dość punktów, liczymy GEOMETRIĘ
-                            if (good.length > 15) {
-                                // Konwersja JS Array na OpenCV Vector
-                                for (let i = 0; i < good.length; i++) {
-                                    good_matches.push_back(good[i]);
-                                }
-
-                                // Wyciągamy koordynaty punktów
+                            // FILTR 2: MINIMUM PUNKTÓW
+                            // Zmieniono z 15 na 22 (musi znaleźć więcej pewnych punktów)
+                            if (good.length > 22) {
+                                
+                                // Przygotowanie danych do homografii
+                                for (let i = 0; i < good.length; i++) good_matches.push_back(good[i]);
+                                
                                 let obj_points = new cv.Mat(good.length, 1, cv.CV_32FC2);
                                 let scene_points = new cv.Mat(good.length, 1, cv.CV_32FC2);
                                 
                                 for (let i = 0; i < good.length; i++) {
                                     let objIdx = good[i].queryIdx;
                                     let sceneIdx = good[i].trainIdx;
-                                    
                                     let kpO = kpRef.get(objIdx);
                                     let kpS = kpFrame.get(sceneIdx);
-                                    
-                                    obj_points.data32F[i * 2] = kpO.pt.x;
-                                    obj_points.data32F[i * 2 + 1] = kpO.pt.y;
-                                    
-                                    // Musimy przeskalować punkty z małej klatki z powrotem na dużą
-                                    scene_points.data32F[i * 2] = kpS.pt.x / scaleFactor;
-                                    scene_points.data32F[i * 2 + 1] = kpS.pt.y / scaleFactor;
+                                    obj_points.data32F[i*2] = kpO.pt.x;
+                                    obj_points.data32F[i*2+1] = kpO.pt.y;
+                                    scene_points.data32F[i*2] = kpS.pt.x / scaleFactor;
+                                    scene_points.data32F[i*2+1] = kpS.pt.y / scaleFactor;
                                 }
 
-                                // MAGIA: Znajdź perspektywę (Homography)
-                                // Używamy RANSAC żeby odrzucić błędy (np. kubek na stole)
-                                homography = cv.findHomography(obj_points, scene_points, cv.RANSAC, 3);
+                                // FILTR 3: RANSAC PROGRESYWNY (3.0 -> 5.0)
+                                homography = cv.findHomography(obj_points, scene_points, cv.RANSAC, 5.0);
 
                                 if (!homography.empty()) {
-                                    // Przeliczamy narożniki markera na ekran telefonu
                                     cv.perspectiveTransform(objCorners, sceneCorners, homography);
 
-                                    // Rysujemy linię łączącą narożniki
+                                    // FILTR 4: SPRAWDZENIE CZY TO MA SENS (AREA CHECK)
+                                    // Sprawdzamy czy wykryty kształt nie jest mikroskopijny albo gigantyczny
                                     let p1 = { x: sceneCorners.data32F[0], y: sceneCorners.data32F[1] };
                                     let p2 = { x: sceneCorners.data32F[2], y: sceneCorners.data32F[3] };
                                     let p3 = { x: sceneCorners.data32F[4], y: sceneCorners.data32F[5] };
-                                    let p4 = { x: sceneCorners.data32F[6], y: sceneCorners.data32F[7] };
+                                    let dx = p2.x - p1.x;
+                                    let dy = p2.y - p1.y;
+                                    let dist = Math.sqrt(dx*dx + dy*dy);
 
-                                    // Rysujemy CZERWONĄ RAMKĘ AR na Twoim logo
-                                    ctx.beginPath();
-                                    ctx.lineWidth = 5;
-                                    ctx.strokeStyle = "red";
-                                    ctx.moveTo(p1.x, p1.y);
-                                    ctx.lineTo(p2.x, p2.y);
-                                    ctx.lineTo(p3.x, p3.y);
-                                    ctx.lineTo(p4.x, p4.y);
-                                    ctx.closePath();
-                                    ctx.stroke();
-
-                                    consoleDiv.innerText = "✅ GEOMETRIA OK! Logo namierzone.";
-                                    consoleDiv.style.background = "#0f0";
-                                    consoleDiv.style.color = "#000";
-                                } else {
-                                    consoleDiv.innerText = "Widzę punkty, ale to nie jest płaskie logo...";
-                                    consoleDiv.style.background = "orange";
-                                }
-
-                                // Czyszczenie tymczasowych wektorów
-                                obj_points.delete(); scene_points.delete(); good_matches.delete();
-                            } else {
-                                consoleDiv.innerText = "Szukam... (Pkt: " + matchesCount + ")";
-                                consoleDiv.style.background = "rgba(0,0,0,0.5)";
-                                consoleDiv.style.color = "#fff";
-                            }
-                            matches.delete();
-                        }
-
-                        // FPS
-                        let fps = Math.round(1000 / (Date.now() - start));
-                        
-                        requestAnimationFrame(processLoop);
-
-                    } catch (err) {
-                        // Ignoruj błędy pojedynczych klatek
-                        requestAnimationFrame(processLoop);
-                    }
-                }
-
-                requestAnimationFrame(processLoop);
-
-            } catch (err) {
-                log("BŁĄD: " + err, "red");
-            }
-        }
-    </script>
-</body>
-</html>
+                                    // Jeśli bok logo jest mniejszy niż 50px (śmieci) -> ODRZUĆ
+                                    if (dist > 50) {
+                                        // RYSOWANIE RAMKI (Tylko jeśli przeszło wszystkie testy)
+                                        let p4 = { x: sceneCorners.data32F[6], y: sceneCorners.data32F[7] };
+                                        
+                                        ctx.beginPath();
+                                        ctx.lineWidth = 4;
+                                        ctx.strokeStyle = "#00FF00"; // Zielona ramka = Pewność
