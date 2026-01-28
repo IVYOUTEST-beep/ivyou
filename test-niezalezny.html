@@ -3,18 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IVYOU | Silnik V6 (Dynamiczny)</title>
+    <title>IVYOU | Silnik V7 (Odsłonięty)</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: monospace; }
         
+        /* POPRAWKA: Kamera jest teraz zawsze widoczna */
         #videoInput {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
-            z-index: 1; opacity: 0; /* Ukryte, ale aktywne */
+            z-index: 1; 
+            display: block; 
+            opacity: 1 !important; /* Wymuszamy widoczność */
         }
 
+        /* Canvas rysuje na wierzchu (półprzezroczysty zielony, gdy wykryje) */
         #canvasOutput {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;
-            z-index: 2; background: #222;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
+            z-index: 2; 
+            pointer-events: none;
         }
         
         #console {
@@ -28,7 +33,7 @@
 </head>
 <body>
 
-    <div id="console">Start V6...</div>
+    <div id="console">Start V7...</div>
     
     <video id="videoInput" playsinline webkit-playsinline autoplay muted></video>
     <img id="refImage" src="marker.jpg" style="display:none;" crossorigin="anonymous">
@@ -46,8 +51,6 @@
         }
 
         window.onerror = function(msg, url, line) {
-            // Ignorujemy błędy ResizeObserver (są niegroźne)
-            if (msg.includes("ResizeObserver")) return;
             log("BŁĄD JS (Linia " + line + "):\n" + msg, "red");
         };
 
@@ -72,21 +75,29 @@
             navigator.mediaDevices.getUserMedia(constraints)
                 .then(function(stream) {
                     video.srcObject = stream;
-                    video.play();
-                    // Nie czekamy na "idealne" wymiary tutaj, pętla to obsłuży
-                    setTimeout(startOpenCVEngine, 1000);
+                    video.play(); // Wymuszamy start
+                    checkVideoSize();
                 })
                 .catch(function(err) {
                     log("Brak tylnej kamery. Próbuję inną...", "orange");
                     navigator.mediaDevices.getUserMedia({ video: true }).then((s) => {
-                        video.srcObject = s; video.play(); setTimeout(startOpenCVEngine, 1000);
+                        video.srcObject = s; video.play(); checkVideoSize();
                     }).catch((e) => log("KAMERA ERROR: " + e.message, "red"));
                 });
         }
 
+        function checkVideoSize() {
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                log("2. Kamera OK (" + video.videoWidth + "x" + video.videoHeight + ").\nStart silnika...");
+                setTimeout(startOpenCVEngine, 500);
+            } else {
+                setTimeout(checkVideoSize, 100);
+            }
+        }
+
         function startOpenCVEngine() {
             try {
-                // KROK A: PRZYGOTOWANIE MARKERA
+                // PRZYGOTOWANIE MARKERA
                 let imgEl = document.getElementById('refImage');
                 if (!imgEl.complete || imgEl.naturalWidth === 0) { throw "Błąd pliku marker.jpg"; }
                 
@@ -94,8 +105,7 @@
                 let refGray = new cv.Mat();
                 cv.cvtColor(refMat, refGray, cv.COLOR_RGBA2GRAY);
                 
-                // SKALOWANIE MARKERA (Dla wydajności)
-                // Zmniejszamy marker, jeśli jest większy niż 500px
+                // Skalowanie markera
                 if (refGray.cols > 500) {
                     let scale = 500 / refGray.cols;
                     let dsize = new cv.Size(500, Math.round(refGray.rows * scale));
@@ -109,11 +119,10 @@
                 
                 if(kpRef.size() < 5) { throw "Logo za proste! (0 pkt)"; }
                 
-                log("2. Wzorzec OK (" + kpRef.size() + " pkt). Pętla start...", "cyan");
+                log("3. Wzorzec OK (" + kpRef.size() + " pkt). Pętla start...", "cyan");
 
                 // ZMIENNE PĘTLI
                 let cap = new cv.VideoCapture(video);
-                // UWAGA: Nie tworzymy tu 'frame' na sztywno! Zrobimy to w pętli.
                 let frame = new cv.Mat(); 
                 let gray = new cv.Mat();
                 let smallFrame = new cv.Mat();
@@ -123,7 +132,7 @@
                 let matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
                 let loopCount = 0;
 
-                // --- PĘTLA GŁÓWNA ---
+                // --- PĘTLA ---
                 function processLoop() {
                     try {
                         if (video.paused || video.ended) {
@@ -131,29 +140,24 @@
                             return;
                         }
 
-                        // === NAPRAWA BŁĘDU ROZMIARU (KLUCZOWE!) ===
-                        // Sprawdzamy, czy wideo ma wymiary
+                        // Obsługa zmiany rozdzielczości
                         if (video.videoWidth === 0 || video.videoHeight === 0) {
                             requestAnimationFrame(processLoop);
                             return;
                         }
 
-                        // Jeśli 'frame' ma zły rozmiar (lub jest pusty), zmieniamy go
                         if (frame.cols !== video.videoWidth || frame.rows !== video.videoHeight) {
-                            frame.delete(); // Usuń stary
+                            frame.delete();
                             frame = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
-                            console.log("Dopasowano rozdzielczość: " + video.videoWidth + "x" + video.videoHeight);
                         }
-                        // ============================================
 
                         let start = Date.now();
                         loopCount++;
 
                         // 1. CZYTANIE
-                        cap.read(frame); // Teraz to powinno zadziałać bezpiecznie
+                        cap.read(frame);
 
-                        // 2. SKALOWANIE (Dla szybkości)
-                        // Analizujemy obrazek o szerokości max 320px
+                        // 2. SKALOWANIE (320px szerokości dla wydajności)
                         let scaleFactor = 320 / frame.cols;
                         let dsize = new cv.Size(320, Math.round(frame.rows * scaleFactor));
                         cv.resize(frame, smallFrame, dsize, 0, 0, cv.INTER_AREA);
@@ -173,34 +177,35 @@
                             matches.delete();
                         }
 
-                        // 5. WIZUALIZACJA (Pokaż co widzi robot)
-                        cv.imshow('canvasOutput', gray); 
-
-                        // 6. STATUS
+                        // 5. STATUS
                         let fps = Math.round(1000 / (Date.now() - start));
                         let msg = "LOOP: " + loopCount + " | FPS: " + fps + "\n";
-                        msg += "Punkty: " + kpFrame.size() + " | MATCH: " + matchesCount;
+                        msg += "Punkty kamery: " + kpFrame.size() + "\nDOPASOWANIA: " + matchesCount + "/20";
                         
                         consoleDiv.innerText = msg;
 
-                        if (matchesCount > 12) {
+                        // 6. SYGNALIZACJA SUKCESU
+                        if (matchesCount > 15) {
                             consoleDiv.style.background = "#0f0";
                             consoleDiv.style.color = "#000";
                             consoleDiv.innerText = "✅ ZNALEZIONO! (" + matchesCount + ")";
+                            
+                            // Opcjonalnie: narysuj prostokąt na canvasie żeby potwierdzić
+                            // Ale nie nadpisujemy całego obrazu, żebyś widział kamerę
                         } else {
                             consoleDiv.style.background = "rgba(0,0,0,0.5)";
                             consoleDiv.style.color = "#fff";
+                            
+                            // Czyścimy canvas (żeby był przezroczysty)
+                            let canvas = document.getElementById('canvasOutput');
+                            let ctx = canvas.getContext('2d');
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
                         }
-
-                        // Ważne: Nie czyścimy kpFrame/desFrame delete(), pozwalamy nadpisać.
-                        // Ale dla pewności w V6 wyczyścimy
-                        // kpFrame.delete(); kpFrame = new cv.KeyPointVector(); // Opcjonalne
-
+                        
                         requestAnimationFrame(processLoop);
 
                     } catch (loopError) {
-                        // Jeśli błąd rozmiaru nadal występuje, łapiemy go tutaj i nie przerywamy pętli
-                        // log("Błąd pętli: " + loopError, "red"); // Odkomentuj tylko do debugowania
+                         // Ignorujemy pojedyncze błędy
                         requestAnimationFrame(processLoop);
                     }
                 }
